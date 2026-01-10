@@ -11,10 +11,12 @@ load_dotenv()
 # Global in-memory message history (reset on refresh/clear)
 MESSAGES = []
 
-beforeware = Beforeware(
-    lambda req, sess: None,
-    skip=[],
-)
+def before(req, sess):
+    print(r'running beforeware')
+    print(f"Request: {req.method} {req.url.path}")
+
+
+beforeware = Beforeware(before, skip=[])
 
 hdrs = (
     # DaisyUI + Tailwind
@@ -82,6 +84,132 @@ def ToolResult(name: str, result: str):
     )
 
 
+# Custom renderers for specific tools (tool_name -> render function)
+# Render function takes (name, args_dict) and returns an FT component
+def render_run_code(name, args):
+    """Custom renderer for run_code tool - shows code with syntax highlighting."""
+    code = args.get("code", "")
+    code_md = f"```python\n{code}\n```"
+    return Div(
+        Span(f"🔧 {name}", cls="font-mono text-primary font-bold"),
+        Div(render_md(code_md), cls="mt-1"),
+    )
+
+
+TOOL_RENDERERS = {
+    "run_code": render_run_code,
+}
+
+
+def render_tool_call(name, args_str, tc_id):
+    """Render a tool call, using custom renderer if available."""
+    try:
+        args_dict = json.loads(args_str) if isinstance(args_str, str) else args_str
+    except json.JSONDecodeError:
+        args_dict = {}
+
+    # Check for custom renderer
+    if name in TOOL_RENDERERS:
+        return Div(
+            TOOL_RENDERERS[name](name, args_dict),
+            Span(f"id: {tc_id}", cls="text-xs opacity-50"),
+            cls="mb-2"
+        )
+
+    # Default rendering
+    return Div(
+        Span(f"🔧 {name}", cls="font-mono text-primary font-bold"),
+        Pre(args_str, cls="text-xs bg-base-300 p-1 rounded mt-1 overflow-x-auto"),
+        Span(f"id: {tc_id}", cls="text-xs opacity-50"),
+        cls="mb-2"
+    )
+
+
+def TraceMessage(msg):
+    """Render a single message in the trace view with full detail."""
+    role = msg.get("role", "unknown")
+
+    # Color coding by role
+    role_colors = {
+        "system": "badge-warning",
+        "user": "badge-primary",
+        "assistant": "badge-secondary",
+        "tool": "badge-accent",
+    }
+    badge_cls = role_colors.get(role, "badge-ghost")
+
+    # Handle different message types
+    if role == "system":
+        content = Pre(
+            msg.get("content", ""),
+            cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded overflow-x-auto max-h-40 overflow-y-auto"
+        )
+    elif role == "user":
+        content = Pre(
+            msg.get("content", ""),
+            cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded"
+        )
+    elif role == "assistant":
+        # Check if it has tool_calls (could be a ChatCompletionMessage object or dict)
+        tool_calls = getattr(msg, "tool_calls", None) or msg.get("tool_calls")
+        if tool_calls:
+            # Assistant message with tool calls
+            calls_display = []
+            for tc in tool_calls:
+                # Handle both object and dict formats
+                if hasattr(tc, "function"):
+                    name = tc.function.name
+                    args = tc.function.arguments
+                    tc_id = tc.id
+                else:
+                    name = tc.get("function", {}).get("name", "?")
+                    args = tc.get("function", {}).get("arguments", "{}")
+                    tc_id = tc.get("id", "?")
+
+                calls_display.append(render_tool_call(name, args, tc_id))
+            content = Div(*calls_display)
+        else:
+            # Regular assistant response
+            content = Pre(
+                msg.get("content", ""),
+                cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded"
+            )
+    elif role == "tool":
+        tool_call_id = msg.get("tool_call_id", "?")
+        content = Div(
+            Span(f"tool_call_id: {tool_call_id}", cls="text-xs opacity-50 block mb-1"),
+            Pre(
+                msg.get("content", ""),
+                cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded max-h-32 overflow-y-auto"
+            )
+        )
+    else:
+        content = Pre(json.dumps(msg, indent=2, default=str), cls="text-xs bg-base-300 p-2 rounded")
+
+    return Div(
+        Div(
+            Span(role.upper(), cls=f"badge {badge_cls} badge-sm"),
+            cls="mb-1"
+        ),
+        content,
+        cls="border-l-2 border-base-300 pl-3 py-2 mb-2"
+    )
+
+
+def TraceView(messages):
+    """Render the full message trace."""
+    if not messages:
+        return Div(
+            Span("No messages yet", cls="text-sm opacity-50"),
+            cls="p-4"
+        )
+
+    return Div(
+        *[TraceMessage(m) for m in messages],
+        cls="p-4"
+    )
+
+
 def ChatInput():
     """The chat input form."""
     return Form(
@@ -122,9 +250,6 @@ def index():
     # Clear messages on page load (refresh = clear)
     MESSAGES = []
 
-    # No history to render on fresh load
-    chat_history = []
-
     return Div(
         # Header
         Div(
@@ -138,21 +263,37 @@ def index():
             ),
             cls="navbar bg-base-100 border-b border-base-300",
         ),
-        # Chat container
+        # Main split layout
         Div(
+            # LEFT SIDE - Chat interface
             Div(
-                *chat_history,
-                id="chat-container",
-                cls="flex flex-col gap-2 p-4 overflow-y-auto flex-1",
+                Div(
+                    id="chat-container",
+                    cls="flex flex-col gap-2 p-4 overflow-y-auto flex-1",
+                ),
+                # Response streaming area
+                Div(id="response-area", cls="px-4"),
+                # Input area
+                Div(
+                    ChatInput(),
+                    cls="p-4 border-t border-base-300",
+                ),
+                cls="flex flex-col h-full border-r border-base-300 bg-base-200",
             ),
-            # Response streaming area
-            Div(id="response-area", cls="px-4"),
-            # Input area
+            # RIGHT SIDE - Message trace view
             Div(
-                ChatInput(),
-                cls="p-4 border-t border-base-300",
+                Div(
+                    Span("MESSAGE TRACE", cls="font-bold text-xs tracking-wider opacity-70"),
+                    cls="p-3 border-b border-base-300 bg-base-100 sticky top-0"
+                ),
+                Div(
+                    TraceView(MESSAGES),
+                    id="trace-container",
+                    cls="overflow-y-auto flex-1"
+                ),
+                cls="flex flex-col h-full bg-base-100",
             ),
-            cls="flex flex-col h-[calc(100vh-64px)]",
+            cls="grid grid-cols-2 h-[calc(100vh-64px)]",
         ),
         cls="min-h-screen bg-base-200",
     )
@@ -162,7 +303,10 @@ def index():
 def post():
     global MESSAGES
     MESSAGES = []
-    return ""
+    return (
+        "",  # Clear chat container
+        Div(TraceView([]), id="trace-container", hx_swap_oob="true"),  # Clear trace
+    )
 
 
 @rt("/chat")
@@ -174,7 +318,7 @@ def post(message: str):
     # Add user message to history
     MESSAGES.append({"role": "user", "content": message})
 
-    # Return user message to chat + SSE container to response-area
+    # Return user message to chat + SSE container to response-area + update trace
     return (
         Div(ChatMessage("user", message), id="chat-container", hx_swap_oob="beforeend"),
         Div(
@@ -189,6 +333,7 @@ def post(message: str):
             id="response-area",
             hx_swap_oob="true",
         ),
+        Div(TraceView(MESSAGES), id="trace-container", hx_swap_oob="true"),
     )
 
 
@@ -198,51 +343,34 @@ async def get():
     from asyncio import sleep
 
     async def event_stream():
-        tool_events_html = ""
-
         # Pass MESSAGES directly - run_agent will mutate it with tool calls/results
         for event in run_agent(MESSAGES):
             if event["type"] == "tool_call":
-                tc = ToolCall(event["data"]["name"], event["data"]["args"])
-                tool_events_html += to_xml(tc)
+                # Left side: don't touch (initial ThinkingIndicator stays)
+                # Right side: update trace with full details
                 content = Div(
-                    NotStr(tool_events_html),
-                    Div(
-                        Span(cls="loading loading-dots loading-sm"),
-                        Span(f"Running {event['data']['name']}...", cls="ml-2 text-sm opacity-70"),
-                        cls="flex items-center py-2",
-                    ),
+                    Div(TraceView(MESSAGES), id="trace-container", hx_swap_oob="true"),
                 )
                 yield sse_message(content, event="AgentEvent")
                 await sleep(0.01)
 
             elif event["type"] == "tool_result":
-                tr = ToolResult(event["data"]["name"], event["data"]["result"])
-                tool_events_html += to_xml(tr)
+                # Left side: don't touch
+                # Right side: update trace
                 content = Div(
-                    NotStr(tool_events_html),
-                    Div(
-                        Span(cls="loading loading-dots loading-sm"),
-                        Span("Agent is thinking...", cls="ml-2 text-sm opacity-70"),
-                        cls="flex items-center py-2",
-                    ),
+                    Div(TraceView(MESSAGES), id="trace-container", hx_swap_oob="true"),
                 )
                 yield sse_message(content, event="AgentEvent")
                 await sleep(0.01)
 
             elif event["type"] == "response":
                 assistant_content = event["data"]["content"]
-                # Note: run_agent already appended the assistant message to MESSAGES
-                # Build the full trace: tool events + final response
-                trace = Div(
-                    NotStr(tool_events_html) if tool_events_html else "",
-                    ChatMessage("assistant", assistant_content),
-                    cls="border-l-2 border-primary pl-4 ml-2 my-2" if tool_events_html else "",
-                )
-                # Use OOB to append trace to chat-container and clear response-area
+                # Left side: just the assistant message (clean chat UX)
+                # Right side: full trace
                 final = Div(
-                    Div(trace, id="chat-container", hx_swap_oob="beforeend"),
+                    Div(ChatMessage("assistant", assistant_content), id="chat-container", hx_swap_oob="beforeend"),
                     Div(id="response-area", hx_swap_oob="true"),
+                    Div(TraceView(MESSAGES), id="trace-container", hx_swap_oob="true"),
                 )
                 yield sse_message(final, event="AgentEvent")
                 await sleep(0.01)

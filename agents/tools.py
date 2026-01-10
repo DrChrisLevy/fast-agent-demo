@@ -22,16 +22,16 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "run_code",
-            "description": "Evaluate a math expression",
+            "description": "Run any arbitrary python code",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "expression": {
+                    "code": {
                         "type": "string",
-                        "description": "Math expression to evaluate",
+                        "description": "Python code to run",
                     }
                 },
-                "required": ["expression"],
+                "required": ["code"],
             },
         },
     },
@@ -44,10 +44,32 @@ def get_weather(city: str) -> str:
     return f"The weather in {city} is 72°F and sunny."
 
 
-def run_code(expression: str) -> str:
+def run_code(code: str) -> str:
+    """Run multi-line Python code. Don't do this in production!"""
     try:
-        result = eval(expression)  # Don't do this in production!
-        return str(result)
+        # Create a namespace to capture variables
+        namespace = {}
+        # Capture stdout
+        import io
+        import sys
+        stdout_capture = io.StringIO()
+        old_stdout = sys.stdout
+        sys.stdout = stdout_capture
+        
+        try:
+            exec(code, namespace)
+        finally:
+            sys.stdout = old_stdout
+        
+        output = stdout_capture.getvalue()
+        
+        # Return printed output, or the last assigned variable named 'result'
+        if output:
+            return output.strip()
+        elif 'result' in namespace:
+            return str(namespace['result'])
+        else:
+            return "Code executed successfully (no output)"
     except Exception as e:
         return f"Error: {e}"
 
