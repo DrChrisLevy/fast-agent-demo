@@ -279,6 +279,8 @@ def index():
                 cls="flex flex-col min-h-0 border-r border-base-300 bg-base-200",
             ),
             # RIGHT SIDE - Message trace view
+            # NOTE: OOB swaps reset scroll position and HTMX scroll modifiers don't work with OOB.
+            # This after-swap handler on the parent is the workaround to keep trace scrolled to bottom.
             Div(
                 Div(
                     Span(
@@ -293,6 +295,9 @@ def index():
                     cls="overflow-y-auto flex-1 min-h-0",
                 ),
                 cls="flex flex-col min-h-0 bg-base-100",
+                **{
+                    "hx-on:htmx:after-swap": "document.getElementById('trace-container').scrollTop = document.getElementById('trace-container').scrollHeight"
+                },
             ),
             cls="grid grid-cols-2 flex-1 min-h-0",
         ),
