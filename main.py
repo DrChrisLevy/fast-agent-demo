@@ -227,7 +227,7 @@ def TraceUpdate():
 # ============ Routes ============
 
 
-@rt("/")
+@rt("/", methods=["GET"])
 def index():
     global MESSAGES
     # Clear messages on page load (refresh = clear)
@@ -286,8 +286,8 @@ def index():
     )
 
 
-@rt("/clear")
-def post():
+@rt("/clear", methods=["POST"])
+def clear_chat():
     global MESSAGES
     MESSAGES = []
     return (
@@ -296,8 +296,8 @@ def post():
     )
 
 
-@rt("/chat")
-def post(message: str):
+@rt("/chat", methods=["POST"])
+def send_message(message: str):
     global MESSAGES
     if not message.strip():
         return ""
@@ -324,8 +324,8 @@ def post(message: str):
     )
 
 
-@rt("/agent-stream")
-async def get():
+@rt("/agent-stream", methods=["GET"])
+async def agent_stream():
     """SSE endpoint that streams agent events."""
 
     async def event_stream():
