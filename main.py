@@ -47,8 +47,7 @@ app, rt = fast_app(
 def ChatMessage(role: str, content: str):
     """Render a chat message bubble."""
     is_user = role == "user"
-    # Render markdown for assistant responses, plain text for user
-    rendered = content if is_user else render_md(content)
+    rendered = render_md(content)
     return Div(
         Div(
             Div(role.capitalize(), cls="chat-header opacity-70 text-xs"),
@@ -188,23 +187,31 @@ def TraceView(messages):
 
 
 def ChatInput():
-    """The chat input form."""
-    return Form(
-        Div(
-            Input(
-                type="text",
-                name="message",
-                placeholder="Ask something...",
-                cls="input input-bordered flex-1",
-                autofocus=True,
-            ),
-            Button("Send", cls="btn btn-primary", type="submit"),
-            cls="flex gap-2",
+    """The chat input form with multiline support. Cmd+Enter to send."""
+    return Div(
+        Textarea(
+            name="message",
+            placeholder="Ask something... (Cmd+Enter to send)",
+            rows=3,
+            cls="textarea textarea-bordered flex-1 resize-none text-base leading-relaxed",
+            autofocus=True,
+            hx_post="/chat",
+            hx_target="#chat-target",
+            hx_swap="none",
+            hx_trigger="keydown[metaKey&&key=='Enter'], keydown[ctrlKey&&key=='Enter']",
+            **{"hx-on::after-request": "this.value = ''"},
         ),
-        hx_post="/chat",
-        hx_swap="none",  # We use OOB swaps instead
-        hx_on__after_request="this.reset();",
-        cls="w-full",
+        Button(
+            "Send",
+            cls="btn btn-primary self-end",
+            hx_post="/chat",
+            hx_target="#chat-target",
+            hx_swap="none",
+            hx_include="[name='message']",
+            **{"hx-on::after-request": "document.querySelector('[name=message]').value = ''"},
+        ),
+        Div(id="chat-target"),
+        cls="flex gap-3 items-end w-full",
     )
 
 
