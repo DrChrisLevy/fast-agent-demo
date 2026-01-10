@@ -167,7 +167,15 @@ def TraceMessage(msg):
                     tc_id = tc.get("id", "?")
 
                 calls_display.append(render_tool_call(name, args, tc_id))
-            content = Div(*calls_display)
+
+            # Parallel calls: display side-by-side in a grid
+            if len(calls_display) > 1:
+                content = Div(
+                    Span("⚡ parallel", cls="text-xs opacity-50 mb-1 block"),
+                    Div(*calls_display, cls="grid grid-cols-2 gap-2"),
+                )
+            else:
+                content = Div(*calls_display)
         else:
             # Regular assistant response
             content = Pre(
