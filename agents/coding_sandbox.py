@@ -6,46 +6,12 @@ from typing import Any, Dict, Generator, Literal, Optional
 from uuid import uuid4
 
 import modal
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
-
 
 
 def get_script_as_string(filepath: str) -> str:
-    with open(filepath, 'r') as file:
+    with open(filepath, "r") as file:
         code_string = file.read()
         return code_string
-
-
-
-class BaseSandbox(ABC):
-    def __init__(
-        self, sandbox_id: Optional[str] = None, timeout: int = 10 * 60, **kwargs: Any
-    ) -> None:
-        pass
-
-    @property
-    @abstractmethod
-    def sandbox_id(self) -> str:
-        """
-        Should return the unique identifier of the sandbox.
-        """
-        pass
-
-    @abstractmethod
-    def terminate(self) -> None:
-        """
-        Should terminate the sandbox.
-        """
-        pass
-
-    @abstractmethod
-    def run_code(self, code: str) -> Dict[str, str]:
-        """
-        Should execute the given code in the sandbox and return its output.
-        The expected format of the output is a dictionary.
-        """
-        pass
 
 
 DEFAULT_RETRY_DELAY = 0.1
@@ -54,18 +20,23 @@ DEFAULT_RETRY_DELAY = 0.1
 MAXIMUM_CODE_RUNTIME = 300
 MAXIMUM_OPEN_FILE_ATTEMPTS = int(MAXIMUM_CODE_RUNTIME / DEFAULT_RETRY_DELAY)
 
-IO_DATA_DIR = '/modal/io'
-STDIN_FILE = os.path.join(IO_DATA_DIR, 'stdin.txt')
+IO_DATA_DIR = "/modal/io"
+STDIN_FILE = os.path.join(IO_DATA_DIR, "stdin.txt")
+
+# Maximum lifetime of the sandbox in seconds (2 hours)
+SANDBOX_TIMEOUT = 2 * 60 * 60
+# Time in seconds sandbox can be idle before being terminated (30 minutes)
+SANDBOX_IDLE_TIMEOUT = 30 * 60
 
 
-class ModalSandbox(BaseSandbox):
+class ModalSandbox:
     IMAGE = (
         modal.Image.debian_slim()
-        .pip_install('pandas', 'tabulate')
+        .pip_install("pandas", "tabulate")
         .env(
             {
-                'IO_DATA_DIR': IO_DATA_DIR,
-                'STDIN_FILE': STDIN_FILE,
+                "IO_DATA_DIR": IO_DATA_DIR,
+                "STDIN_FILE": STDIN_FILE,
             }
         )
         # Define the directory/file on the image level to ensure they exist
@@ -73,7 +44,7 @@ class ModalSandbox(BaseSandbox):
         # with reading/writing to the file (e.g file not being created yet when calling `run_code`)
         .run_commands(
             [
-                f'mkdir -p {IO_DATA_DIR} && touch {STDIN_FILE}',
+                f"mkdir -p {IO_DATA_DIR} && touch {STDIN_FILE}",
             ]
         )
     )
@@ -91,12 +62,17 @@ class ModalSandbox(BaseSandbox):
                 self.sandbox = existing_sb
                 return
 
-        app = modal.App.lookup('python-sandbox', create_if_missing=True)
-        driver_program = get_script_as_string(
-            'agents/driver_program.py'
-        )
+        app = modal.App.lookup("python-sandbox", create_if_missing=True)
+        driver_program = get_script_as_string("agents/driver_program.py")
         self.sandbox = modal.Sandbox.create(
-            'python', '-c', driver_program, image=self.IMAGE, app=app, **kwargs
+            "python",
+            "-c",
+            driver_program,
+            image=self.IMAGE,
+            app=app,
+            timeout=SANDBOX_TIMEOUT,
+            idle_timeout=SANDBOX_IDLE_TIMEOUT,
+            **kwargs,
         )
         if init_script:
             self.run_code(init_script)
@@ -126,7 +102,7 @@ class ModalSandbox(BaseSandbox):
     def _open_sandbox_file(
         self,
         file_path: str,
-        mode: Literal['r', 'w', 'a'],
+        mode: Literal["r", "w", "a"],
         max_attempts: int,
         retry_delay: float = DEFAULT_RETRY_DELAY,
         extra_exceptions: tuple[type[Exception], ...] | None = None,
@@ -140,9 +116,7 @@ class ModalSandbox(BaseSandbox):
         """
 
         extra_exceptions = extra_exceptions or ()
-        retry_on_exceptions: tuple[type[Exception], ...] = (
-            modal.exception.FilesystemExecutionError,
-        ) + extra_exceptions
+        retry_on_exceptions: tuple[type[Exception], ...] = (modal.exception.FilesystemExecutionError,) + extra_exceptions
 
         attempt = 0
         while True:
@@ -163,23 +137,22 @@ class ModalSandbox(BaseSandbox):
         # 1. Write code into a STDIN file on the sandbox.
         # - Opening the file occasionally fails unexpectedly
         # - We retry several times before raising the exception
-        with self._open_sandbox_file(STDIN_FILE, 'a', max_attempts=3) as f:
-            f.write(json.dumps({'code': code, 'command_id': command_id}))
-            f.write('\n')
+        with self._open_sandbox_file(STDIN_FILE, "a", max_attempts=3) as f:
+            f.write(json.dumps({"code": code, "command_id": command_id}))
+            f.write("\n")
 
         # 2. The sandbox polls this STDIN file for changes,
         # executes the added code, then saves the output to a file.
-        out_file = os.path.join(IO_DATA_DIR, f'{command_id}.txt')
+        out_file = os.path.join(IO_DATA_DIR, f"{command_id}.txt")
 
         # 3. We poll the Sandbox to check if it has created the output file,
         # and if so, return the output from the file.
         # - FileNotFoundError is expected, until the driver program creates the output file.
         with self._open_sandbox_file(
             out_file,
-            'r',
+            "r",
             max_attempts=MAXIMUM_OPEN_FILE_ATTEMPTS,
             extra_exceptions=(FileNotFoundError,),
         ) as f:
             result = json.load(f)
             return result
-

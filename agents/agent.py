@@ -30,10 +30,10 @@ def run_agent(messages):
     while True:
         # Call the LLM
         response = litellm.completion(
-            model="gpt-5.2", # "gemini/gemini-3-flash-preview", #claude-opus-4-5-20251101, gpt-5.2
+            model="gpt-5.2",  # "gemini/gemini-3-flash-preview", #claude-opus-4-5-20251101, gpt-5.2
             messages=messages,
             tools=TOOLS,
-            reasoning_effort="low"
+            reasoning_effort="low",
         )
 
         # Append assistant message (thought signatures automatically preserved)

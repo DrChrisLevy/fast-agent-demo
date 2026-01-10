@@ -22,15 +22,15 @@ Note: this could change in the future as modal improves.
 """
 
 # These are injected when defining the image in modal_sandbox.py
-IO_DATA_DIR = os.environ['IO_DATA_DIR']
-STDIN_FILE = os.environ['STDIN_FILE']
+IO_DATA_DIR = os.environ["IO_DATA_DIR"]
+STDIN_FILE = os.environ["STDIN_FILE"]
 
 
 def tail_f(filename: str) -> Generator[str, None, None]:
     """
     Continuously yields new lines from the file.
     """
-    with open(filename, 'r') as f:
+    with open(filename, "r") as f:
         while True:
             line = f.readline()
             if not line:
@@ -42,17 +42,17 @@ def tail_f(filename: str) -> Generator[str, None, None]:
 globals: dict[str, Any] = {}
 for line in tail_f(STDIN_FILE):
     line = line.strip()
-    print(f'Received line: {line} len: {len(line)}')
+    print(f"Received line: {line} len: {len(line)}")
     if not line:
         continue
 
     command = json.loads(line)
-    if (code := command.get('code')) is None:
-        print(json.dumps({'error': 'No code to execute'}))
+    if (code := command.get("code")) is None:
+        print(json.dumps({"error": "No code to execute"}))
         continue
 
-    if (command_id := command.get('command_id')) is None:
-        print(json.dumps({'error': 'No command_id'}))
+    if (command_id := command.get("command_id")) is None:
+        print(json.dumps({"error": "No command_id"}))
         continue
 
     stdout_io, stderr_io = StringIO(), StringIO()
@@ -60,14 +60,14 @@ for line in tail_f(STDIN_FILE):
         try:
             exec(code, globals)
         except Exception as e:
-            print(f'{type(e).__name__}: {e}', file=sys.stderr)
+            print(f"{type(e).__name__}: {e}", file=sys.stderr)
 
-    with open(os.path.join(IO_DATA_DIR, f'{command_id}.txt'), 'w') as f:
+    with open(os.path.join(IO_DATA_DIR, f"{command_id}.txt"), "w") as f:
         f.write(
             json.dumps(
                 {
-                    'stdout': stdout_io.getvalue(),
-                    'stderr': stderr_io.getvalue(),
+                    "stdout": stdout_io.getvalue(),
+                    "stderr": stderr_io.getvalue(),
                 }
             )
         )

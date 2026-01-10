@@ -11,9 +11,7 @@ TOOLS = [
             "description": "Get the current weather for a city",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "city": {"type": "string", "description": "The city name"}
-                },
+                "properties": {"city": {"type": "string", "description": "The city name"}},
                 "required": ["city"],
             },
         },
@@ -52,22 +50,23 @@ def run_code(code: str) -> str:
         # Capture stdout
         import io
         import sys
+
         stdout_capture = io.StringIO()
         old_stdout = sys.stdout
         sys.stdout = stdout_capture
-        
+
         try:
             exec(code, namespace)
         finally:
             sys.stdout = old_stdout
-        
+
         output = stdout_capture.getvalue()
-        
+
         # Return printed output, or the last assigned variable named 'result'
         if output:
             return output.strip()
-        elif 'result' in namespace:
-            return str(namespace['result'])
+        elif "result" in namespace:
+            return str(namespace["result"])
         else:
             return "Code executed successfully (no output)"
     except Exception as e:
