@@ -2,6 +2,20 @@
 Tool definitions and implementations for the agent.
 """
 
+from agents.coding_sandbox import ModalSandbox
+
+# Lazy-initialized sandbox instance
+_sandbox: ModalSandbox | None = None
+
+
+def get_sandbox() -> ModalSandbox:
+    """Get or create the shared sandbox instance."""
+    global _sandbox
+    if _sandbox is None:
+        _sandbox = ModalSandbox()
+    return _sandbox
+
+
 # Define tools the agent can use
 TOOLS = [
     {
@@ -43,34 +57,14 @@ def get_weather(city: str) -> str:
 
 
 def run_code(code: str) -> str:
-    """Run multi-line Python code. Don't do this in production!"""
+    """Run Python code in the Modal sandbox. Returns JSON with stdout/stderr."""
+    import json
+
     try:
-        # Create a namespace to capture variables
-        namespace = {}
-        # Capture stdout
-        import io
-        import sys
-
-        stdout_capture = io.StringIO()
-        old_stdout = sys.stdout
-        sys.stdout = stdout_capture
-
-        try:
-            exec(code, namespace)
-        finally:
-            sys.stdout = old_stdout
-
-        output = stdout_capture.getvalue()
-
-        # Return printed output, or the last assigned variable named 'result'
-        if output:
-            return output.strip()
-        elif "result" in namespace:
-            return str(namespace["result"])
-        else:
-            return "Code executed successfully (no output)"
+        sandbox = get_sandbox()
+        return json.dumps(sandbox.run_code(code))
     except Exception as e:
-        return f"Error: {e}"
+        return json.dumps({"stdout": "", "stderr": str(e)})
 
 
 # Map tool names to functions
