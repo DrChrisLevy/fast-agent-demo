@@ -33,7 +33,7 @@ app, rt = fast_app(
     before=beforeware,
     pico=False,
     hdrs=hdrs,
-    htmlkw={"data-theme": "corporate"},
+    htmlkw={"data-theme": "cupcake"},
     secret_key=os.getenv("FAST_APP_SECRET"),
     max_age=365 * 24 * 3600,
 )
