@@ -7,50 +7,60 @@ No abstractions. No bells and whistles. Just the core loop.
 
 import json
 from dotenv import load_dotenv
-from openai import OpenAI
-from pprint import pprint
 from agents.tools import TOOLS, TOOL_FUNCTIONS
+import litellm
+import warnings
 
+warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 load_dotenv()
 
-client = OpenAI()
 
-
-def run_agent(messages) -> str:
+def run_agent(messages):
     """
-    The agent loop.
+    The agent loop as a generator - yields events for streaming.
 
-    1. Send messages to LLM
-    2. If LLM returns tool calls, execute them and loop
-    3. If LLM returns a regular message, return it
+    Yields dicts with 'type' and 'data':
+      - {"type": "tool_call", "data": {"name": ..., "args": ...}}
+      - {"type": "tool_result", "data": {"name": ..., "result": ...}}
+      - {"type": "response", "data": {"content": ...}}
     """
+    if not messages or messages[0].get("role") != "system":
+        messages.insert(0, {"role": "system", "content": "You are a helpful assistant."})
 
     while True:
-        pprint(messages)
         # Call the LLM
-        response = client.chat.completions.create(
-            model="gpt-5-mini",
+        response = litellm.completion(
+            model="gpt-5.2", # "gemini/gemini-3-flash-preview", #claude-opus-4-5-20251101, gpt-5.2
             messages=messages,
             tools=TOOLS,
+            reasoning_effort="low"
         )
 
+        # Append assistant message (thought signatures automatically preserved)
         message = response.choices[0].message
 
-        # If no tool calls, we're done - return the response
+        # If no tool calls, we're done - append to history and yield final response
         if not message.tool_calls:
-            return message.content
+            messages.append({"role": "assistant", "content": message.content})
+            yield {"type": "response", "data": {"content": message.content}}
+            return
 
         # Otherwise, process tool calls
         messages.append(message)  # Add assistant message with tool calls
 
+        # Execute tool and append result
         for tool_call in message.tool_calls:
             name = tool_call.function.name
             args = json.loads(tool_call.function.arguments)
 
-            print(f"Calling tool: {name}({args})")
+            # Yield tool call event
+            yield {"type": "tool_call", "data": {"name": name, "args": args}}
 
             # Execute the tool
             result = TOOL_FUNCTIONS[name](**args)
+
+            # Yield tool result event
+            yield {"type": "tool_result", "data": {"name": name, "result": result}}
 
             # Add tool result to messages
             messages.append(
