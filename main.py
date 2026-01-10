@@ -26,6 +26,8 @@ hdrs = (
     Script(src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"),
     # HTMX SSE extension
     Script(src="https://unpkg.com/htmx-ext-sse@2.2.1/sse.js"),
+    # Lock viewport
+    Style("html, body { height: 100%; overflow: hidden; margin: 0; }"),
 )
 app, rt = fast_app(
     before=beforeware,
@@ -221,7 +223,7 @@ def ThinkingIndicator():
 
 def TraceUpdate():
     """OOB swap to update trace panel."""
-    return Div(TraceView(MESSAGES), id="trace-container", hx_swap_oob="true")
+    return Div(TraceView(MESSAGES), id="trace-container", hx_swap_oob="true", cls="overflow-y-auto flex-1 min-h-0")
 
 
 # ============ Routes ============
@@ -256,7 +258,7 @@ def index():
             Div(
                 Div(
                     id="chat-container",
-                    cls="flex flex-col gap-2 p-4 overflow-y-auto flex-1",
+                    cls="flex flex-col gap-2 p-4 overflow-y-auto flex-1 min-h-0",
                 ),
                 # Response streaming area
                 Div(id="response-area", cls="px-4"),
@@ -265,7 +267,7 @@ def index():
                     ChatInput(),
                     cls="p-4 border-t border-base-300",
                 ),
-                cls="flex flex-col h-full border-r border-base-300 bg-base-200",
+                cls="flex flex-col min-h-0 border-r border-base-300 bg-base-200",
             ),
             # RIGHT SIDE - Message trace view
             Div(
@@ -276,13 +278,13 @@ def index():
                 Div(
                     TraceView(MESSAGES),
                     id="trace-container",
-                    cls="overflow-y-auto flex-1"
+                    cls="overflow-y-auto flex-1 min-h-0"
                 ),
-                cls="flex flex-col h-full bg-base-100",
+                cls="flex flex-col min-h-0 bg-base-100",
             ),
-            cls="grid grid-cols-2 h-[calc(100vh-64px)]",
+            cls="grid grid-cols-2 flex-1 min-h-0",
         ),
-        cls="min-h-screen bg-base-200",
+        cls="h-screen flex flex-col overflow-hidden bg-base-200",
     )
 
 
@@ -292,7 +294,7 @@ def clear_chat():
     MESSAGES = []
     return (
         "",  # Clear chat container
-        Div(TraceView([]), id="trace-container", hx_swap_oob="true"),  # Clear trace
+        Div(TraceView([]), id="trace-container", hx_swap_oob="true", cls="overflow-y-auto flex-1 min-h-0"),  # Clear trace
     )
 
 
