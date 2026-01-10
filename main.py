@@ -1,6 +1,7 @@
 # ruff: noqa: F403, F405
 
 import json
+from asyncio import sleep
 from dotenv import load_dotenv
 from fasthtml.common import *
 from agents.agent import run_agent
@@ -51,36 +52,6 @@ def ChatMessage(role: str, content: str):
             cls=f"chat {'chat-end' if is_user else 'chat-start'}",
         ),
         id=f"msg-{hash(content) % 10000}",
-    )
-
-
-def ToolCall(name: str, args: dict):
-    """Render a tool call indicator."""
-    return Div(
-        Div(
-            Span("🔧", cls="mr-2"),
-            Span("Calling ", cls="opacity-70"),
-            Code(name, cls="font-bold text-primary"),
-            Span("(", cls="opacity-70"),
-            Code(json.dumps(args), cls="text-xs"),
-            Span(")", cls="opacity-70"),
-            cls="flex items-center",
-        ),
-        cls="alert alert-info py-2 my-1 text-sm",
-    )
-
-
-def ToolResult(name: str, result: str):
-    """Render a tool result."""
-    return Div(
-        Div(
-            Span("✓", cls="mr-2 text-success"),
-            Code(name, cls="font-bold"),
-            Span(" → ", cls="opacity-70"),
-            Span(result, cls="font-mono text-xs"),
-            cls="flex items-center flex-wrap",
-        ),
-        cls="alert py-2 my-1 text-sm bg-base-200",
     )
 
 
@@ -245,8 +216,12 @@ def ThinkingIndicator():
         Span(cls="loading loading-dots loading-sm"),
         Span("Agent is thinking...", cls="ml-2 text-sm opacity-70"),
         cls="flex items-center py-2",
-        id="thinking",
     )
+
+
+def TraceUpdate():
+    """OOB swap to update trace panel."""
+    return Div(TraceView(MESSAGES), id="trace-container", hx_swap_oob="true")
 
 
 # ============ Routes ============
@@ -259,15 +234,19 @@ def index():
     MESSAGES = []
 
     return Div(
-        # Header
-        Div(
-            H1("Agent Chat", cls="text-2xl font-bold"),
-            Button(
-                "Clear",
-                hx_post="/clear",
-                hx_target="#chat-container",
-                hx_swap="innerHTML",
-                cls="btn btn-ghost btn-sm",
+        # Header - DaisyUI navbar
+        Nav(
+            Div(H1("Agent Chat", cls="text-xl font-bold"), cls="navbar-start"),
+            Div(cls="navbar-center"),
+            Div(
+                Button(
+                    "Clear",
+                    hx_post="/clear",
+                    hx_target="#chat-container",
+                    hx_swap="innerHTML",
+                    cls="btn btn-ghost btn-sm",
+                ),
+                cls="navbar-end",
             ),
             cls="navbar bg-base-100 border-b border-base-300",
         ),
@@ -326,7 +305,7 @@ def post(message: str):
     # Add user message to history
     MESSAGES.append({"role": "user", "content": message})
 
-    # Return user message to chat + SSE container to response-area + update trace
+    # Return user message + SSE container + trace update
     return (
         Div(ChatMessage("user", message), id="chat-container", hx_swap_oob="beforeend"),
         Div(
@@ -341,46 +320,31 @@ def post(message: str):
             id="response-area",
             hx_swap_oob="true",
         ),
-        Div(TraceView(MESSAGES), id="trace-container", hx_swap_oob="true"),
+        TraceUpdate(),
     )
 
 
 @rt("/agent-stream")
 async def get():
     """SSE endpoint that streams agent events."""
-    from asyncio import sleep
 
     async def event_stream():
-        # Pass MESSAGES directly - run_agent will mutate it with tool calls/results
         for event in run_agent(MESSAGES):
-            if event["type"] == "tool_call":
-                # Left side: don't touch (initial ThinkingIndicator stays)
-                # Right side: update trace with full details
-                content = Div(
-                    Div(TraceView(MESSAGES), id="trace-container", hx_swap_oob="true"),
-                )
-                yield sse_message(content, event="AgentEvent")
-                await sleep(0.01)
-
-            elif event["type"] == "tool_result":
-                # Left side: don't touch
-                # Right side: update trace
-                content = Div(
-                    Div(TraceView(MESSAGES), id="trace-container", hx_swap_oob="true"),
-                )
-                yield sse_message(content, event="AgentEvent")
+            if event["type"] in ("tool_call", "tool_result"):
+                # Just update the trace panel, keep thinking indicator on left
+                yield sse_message(TraceUpdate(), event="AgentEvent")
                 await sleep(0.01)
 
             elif event["type"] == "response":
-                assistant_content = event["data"]["content"]
-                # Left side: just the assistant message (clean chat UX)
-                # Right side: full trace
-                final = Div(
-                    Div(ChatMessage("assistant", assistant_content), id="chat-container", hx_swap_oob="beforeend"),
-                    Div(id="response-area", hx_swap_oob="true"),
-                    Div(TraceView(MESSAGES), id="trace-container", hx_swap_oob="true"),
+                # Final response: add assistant message, clear response area, update trace
+                yield sse_message(
+                    Div(
+                        Div(ChatMessage("assistant", event["data"]["content"]), id="chat-container", hx_swap_oob="beforeend"),
+                        Div(id="response-area", hx_swap_oob="true"),
+                        TraceUpdate(),
+                    ),
+                    event="AgentEvent",
                 )
-                yield sse_message(final, event="AgentEvent")
                 await sleep(0.01)
                 yield sse_message(Div(), event="close")
 
