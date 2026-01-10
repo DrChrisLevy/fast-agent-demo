@@ -16,6 +16,17 @@ def get_sandbox() -> ModalSandbox:
     return _sandbox
 
 
+def reset_sandbox() -> None:
+    """Terminate and reset the sandbox for a fresh conversation."""
+    global _sandbox
+    if _sandbox is not None:
+        try:
+            _sandbox.terminate()
+        except Exception:
+            pass  # Ignore errors during termination
+        _sandbox = None
+
+
 # Define tools the agent can use
 TOOLS = [
     {

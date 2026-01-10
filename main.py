@@ -5,6 +5,7 @@ from asyncio import sleep
 from dotenv import load_dotenv
 from fasthtml.common import *
 from agents.agent import run_agent
+from agents.tools import reset_sandbox
 from components import render_md
 
 load_dotenv()
@@ -234,6 +235,7 @@ def index():
     global MESSAGES
     # Clear messages on page load (refresh = clear)
     MESSAGES = []
+    reset_sandbox()
 
     return Div(
         # Header - DaisyUI navbar
@@ -295,6 +297,7 @@ def index():
 def clear_chat():
     global MESSAGES
     MESSAGES = []
+    reset_sandbox()
     return (
         "",  # Clear chat container
         Div(
