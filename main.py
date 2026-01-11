@@ -171,23 +171,26 @@ def send_message(message: str):
     )
 
 
+def is_final_response(msg):
+    """Check if message is the final assistant response (no tool calls)."""
+    role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "role", None)
+    tool_calls = msg.get("tool_calls") if isinstance(msg, dict) else getattr(msg, "tool_calls", None)
+    return role == "assistant" and not tool_calls
+
+
 @rt("/agent-stream", methods=["GET"])
 async def agent_stream():
-    """SSE endpoint that streams agent events."""
+    """SSE endpoint that streams agent messages."""
 
     async def event_stream():
-        for event in run_agent(MESSAGES):
-            if event["type"] in ("tool_call", "tool_result", "thinking"):
-                # Just update the trace panel, keep thinking indicator on left
-                yield sse_message(TraceUpdate(MESSAGES), event="AgentEvent")
-                await sleep(0.01)
-
-            elif event["type"] == "response":
-                # Final response: add assistant message, clear response area, update trace
+        for msg in run_agent(MESSAGES):
+            if is_final_response(msg):
+                # Final response: add to chat, clear response area, update trace
+                content = msg.get("content") if isinstance(msg, dict) else msg.content
                 yield sse_message(
                     Div(
                         Div(
-                            ChatMessage("assistant", event["data"]["content"]),
+                            ChatMessage("assistant", content),
                             id="chat-container",
                             hx_swap_oob="beforeend",
                         ),
@@ -198,6 +201,10 @@ async def agent_stream():
                 )
                 await sleep(0.01)
                 yield sse_message(Div(), event="close")
+            else:
+                # Intermediate (tool calls or tool results): just update trace
+                yield sse_message(TraceUpdate(MESSAGES), event="AgentEvent")
+                await sleep(0.01)
 
     return EventStream(event_stream())
 

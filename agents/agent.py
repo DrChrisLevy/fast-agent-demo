@@ -18,12 +18,12 @@ load_dotenv()
 
 def run_agent(messages):
     """
-    The agent loop as a generator - yields events for streaming.
+    The agent loop as a generator - yields messages as they're added.
 
-    Yields dicts with 'type' and 'data':
-      - {"type": "tool_call", "data": {"name": ..., "args": ...}}
-      - {"type": "tool_result", "data": {"name": ..., "result": ...}}
-      - {"type": "response", "data": {"content": ...}}
+    Yields messages in standard Chat Completions format:
+      - {"role": "assistant", "tool_calls": [...], ...}  # Assistant requesting tool calls
+      - {"role": "tool", "tool_call_id": ..., "content": ...}  # Tool result
+      - {"role": "assistant", "content": ...}  # Final response (no tool_calls)
     """
     if not messages or messages[0].get("role") != "system":
         messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
@@ -40,38 +40,27 @@ def run_agent(messages):
         # Append assistant message (thought signatures automatically preserved)
         message = response.choices[0].message
 
-        # If no tool calls, we're done - append to history and yield final response
+        # If no tool calls, we're done - yield final response
         if not message.tool_calls:
-            messages.append({"role": "assistant", "content": message.content})
-            yield {"type": "response", "data": {"content": message.content}}
+            final_msg = {"role": "assistant", "content": message.content}
+            messages.append(final_msg)
+            yield final_msg
             return
 
-        # Otherwise, process tool calls
-        messages.append(message)  # Add assistant message with tool calls
+        # Assistant message with tool calls - add and yield it
+        messages.append(message)
+        yield message
 
-        # Yield assistant content if present (some models include text alongside tool calls)
-        if message.content:
-            yield {"type": "thinking", "data": {"content": message.content}}
-
-        # Execute tool and append result
+        # Execute each tool and yield results
         for tool_call in message.tool_calls:
             name = tool_call.function.name
             args = json.loads(tool_call.function.arguments)
-
-            # Yield tool call event
-            yield {"type": "tool_call", "data": {"name": name, "args": args}}
-
-            # Execute the tool
             result = TOOL_FUNCTIONS[name](**args)
 
-            # Yield tool result event
-            yield {"type": "tool_result", "data": {"name": name, "result": result}}
-
-            # Add tool result to messages
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": result,
-                }
-            )
+            tool_msg = {
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": result,
+            }
+            messages.append(tool_msg)
+            yield tool_msg
