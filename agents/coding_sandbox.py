@@ -64,14 +64,17 @@ class ModalSandbox:
 
         app = modal.App.lookup("python-sandbox", create_if_missing=True)
         driver_program = get_script_as_string("agents/driver_program.py")
+        # Use provided timeout/idle_timeout or fall back to defaults
+        timeout = kwargs.pop("timeout", SANDBOX_TIMEOUT)
+        idle_timeout = kwargs.pop("idle_timeout", SANDBOX_IDLE_TIMEOUT)
         self.sandbox = modal.Sandbox.create(
             "python",
             "-c",
             driver_program,
             image=self.IMAGE,
             app=app,
-            timeout=SANDBOX_TIMEOUT,
-            idle_timeout=SANDBOX_IDLE_TIMEOUT,
+            timeout=timeout,
+            idle_timeout=idle_timeout,
             **kwargs,
         )
         if init_script:

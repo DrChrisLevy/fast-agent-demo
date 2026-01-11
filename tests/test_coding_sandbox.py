@@ -7,17 +7,10 @@ from uuid import uuid4
 import modal
 import pytest
 
-from vision_ai_backend.controllers.intents.coding_agent.modal_sandbox import (
-    ModalSandbox as Sandbox,
-)
-from vision_ai_backend.controllers.intents.coding_agent.modal_sandbox import (
-    get_or_create_sandbox_from_conversation_id,
-)
+from agents.coding_sandbox import ModalSandbox as Sandbox
 
 
-@pytest.mark.skip(
-    reason='Creates real Modal sandboxes - too slow for CI. Can still be run locally.'
-)
+@pytest.mark.slow
 class TestRealModalSandbox:
     """
     This class contains integration tests for the ModalSandbox class,
@@ -32,41 +25,41 @@ class TestRealModalSandbox:
         sb = Sandbox()
         resp = sb.run_code('print("Hello, World!")')
         assert resp == {
-            'stdout': 'Hello, World!\n',
-            'stderr': '',
+            "stdout": "Hello, World!\n",
+            "stderr": "",
         }
-        resp = sb.run_code('x=1')
-        assert resp == {'stdout': '', 'stderr': ''}
-        resp = sb.run_code('y=x+1\nprint(y)')
-        assert resp == {'stdout': '2\n', 'stderr': ''}
-        resp = sb.run_code('z = y ** 2\nprint(z)')
-        assert resp == {'stdout': '4\n', 'stderr': ''}
+        resp = sb.run_code("x=1")
+        assert resp == {"stdout": "", "stderr": ""}
+        resp = sb.run_code("y=x+1\nprint(y)")
+        assert resp == {"stdout": "2\n", "stderr": ""}
+        resp = sb.run_code("z = y ** 2\nprint(z)")
+        assert resp == {"stdout": "4\n", "stderr": ""}
         sb.terminate()
 
     def test_code_sandbox_test2(self):
         sb = Sandbox(init_script="print('INIT1')\nprint('INIT2')\nprint('INIT3')\nz=3.14")
-        resp = sb.run_code('print(z)\nprint(z + 10)')
+        resp = sb.run_code("print(z)\nprint(z + 10)")
         assert resp == {
-            'stdout': '3.14\n13.14\n',
-            'stderr': '',
+            "stdout": "3.14\n13.14\n",
+            "stderr": "",
         }
         sb.terminate()
 
     def test_code_sandbox_test3(self):
-        sb = Sandbox(init_script='x=1\ny=2\nz=3')
-        resp = sb.run_code('print(x, y, z)')
+        sb = Sandbox(init_script="x=1\ny=2\nz=3")
+        resp = sb.run_code("print(x, y, z)")
         assert resp == {
-            'stdout': '1 2 3\n',
-            'stderr': '',
+            "stdout": "1 2 3\n",
+            "stderr": "",
         }
         sb.terminate()
 
     def test_code_sandbox_test4(self):
-        sb = Sandbox(init_script='x=1\ny=2\nz=3')
-        resp = sb.run_code('print(x, y, z)')
+        sb = Sandbox(init_script="x=1\ny=2\nz=3")
+        resp = sb.run_code("print(x, y, z)")
         assert resp == {
-            'stdout': '1 2 3\n',
-            'stderr': '',
+            "stdout": "1 2 3\n",
+            "stderr": "",
         }
         sb.terminate()
 
@@ -105,7 +98,7 @@ class TestRealModalSandbox:
         """
         )
         resp1 = sb.run_code(code1)
-        assert 'Fibonacci sequence: [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]' in resp1['stdout']
+        assert "Fibonacci sequence: [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]" in resp1["stdout"]
 
         # Test 2: Use previously defined functions and variables
         code2 = dedent(
@@ -122,11 +115,11 @@ class TestRealModalSandbox:
         """
         )
         resp2 = sb.run_code(code2)
-        assert 'Statistics for [10, 15, 20, 25, 30]:' in resp2['stdout']
+        assert "Statistics for [10, 15, 20, 25, 30]:" in resp2["stdout"]
         assert resp2 == {
-            'stdout': 'Statistics for [10, 15, 20, 25, 30]:\n  mean: 20.0\n  median: 20.0\n  '
-            'std_dev: 7.0710678118654755\n  sum: 100\n  count: 5\nGeometric mean: 18.64\n',
-            'stderr': '',
+            "stdout": "Statistics for [10, 15, 20, 25, 30]:\n  mean: 20.0\n  median: 20.0\n  "
+            "std_dev: 7.0710678118654755\n  sum: 100\n  count: 5\nGeometric mean: 18.64\n",
+            "stderr": "",
         }
 
         # Test 3: Handle errors gracefully
@@ -144,78 +137,22 @@ class TestRealModalSandbox:
         )
         resp3 = sb.run_code(code3)
         assert resp3 == {
-            'stdout': 'Caught error: ZeroDivisionError: division by zero\nExecution continues\n',
-            'stderr': '',
+            "stdout": "Caught error: ZeroDivisionError: division by zero\nExecution continues\n",
+            "stderr": "",
         }
 
-        sb.terminate()
-
-    def test_get_or_create_sandbox_from_conversation_id_with_init_script(self):
-        sandboxes = modal.Dict.from_name('conversation_id_to_sandbox_id', create_if_missing=True)
-        conversation_id = str(uuid4())
-        assert conversation_id not in sandboxes
-        init_script = "print('INIT1')\nprint('INIT2')\nprint('INIT3')\nz=3.14"
-        sb = get_or_create_sandbox_from_conversation_id(conversation_id, init_script=init_script)
-        sandbox_id = sb.sandbox_id
-        resp = sb.run_code('print(z)\nprint(z + 10)')
-        assert resp == {'stdout': '3.14\n13.14\n', 'stderr': ''}
-
-        sb = get_or_create_sandbox_from_conversation_id(conversation_id, init_script=init_script)
-        assert sb.sandbox_id == sandbox_id
-        resp = sb.run_code('print(z)\nprint(z + 10)')
-        assert resp == {
-            'stdout': '3.14\n13.14\n',
-            'stderr': '',
-        }
-        resp = sb.run_code('x=10\ny=8\nprint(x+y)')
-        assert resp == {
-            'stdout': '18\n',
-            'stderr': '',
-        }
-        sb.terminate()
-        # test that sandbox can be created again from the same conversation_id
-        # even after it has been terminated
-        sb = get_or_create_sandbox_from_conversation_id(conversation_id, init_script=init_script)
-        resp = sb.run_code('print(z)\nprint(z + 10)')
-        assert resp == {'stdout': '3.14\n13.14\n', 'stderr': ''}
-        sb.terminate()
-
-    def test_get_or_create_sandbox_from_conversation_id_without_init_script(self):
-        sandboxes = modal.Dict.from_name('conversation_id_to_sandbox_id', create_if_missing=True)
-        conversation_id = str(uuid4())
-        assert conversation_id not in sandboxes
-        sb = get_or_create_sandbox_from_conversation_id(conversation_id)
-        sandbox_id = sb.sandbox_id
-        sb = get_or_create_sandbox_from_conversation_id(conversation_id)
-        assert sb.sandbox_id == sandbox_id
-        resp = sb.run_code('z=3.14\nprint(z)\nprint(z + 10)')
-        assert resp == {
-            'stdout': '3.14\n13.14\n',
-            'stderr': '',
-        }
-        sb = get_or_create_sandbox_from_conversation_id(conversation_id)
-        resp = sb.run_code('print(z)\nprint(z + 10)')
-        assert resp == {
-            'stdout': '3.14\n13.14\n',
-            'stderr': '',
-        }
-        resp = sb.run_code('x=10\ny=8\nprint(x+y)')
-        assert resp == {
-            'stdout': '18\n',
-            'stderr': '',
-        }
         sb.terminate()
 
     def test_get_running_sandbox_from_id(self):
         assert Sandbox._get_running_sandbox_from_id(uuid4()) is None
         sb = Sandbox()
-        sb.run_code('x=2')
-        sb.run_code('y=4')
+        sb.run_code("x=2")
+        sb.run_code("y=4")
         sb = Sandbox(sandbox_id=sb.sandbox_id)
-        resp = sb.run_code('print(x+y)')
+        resp = sb.run_code("print(x+y)")
         assert resp == {
-            'stdout': '6\n',
-            'stderr': '',
+            "stdout": "6\n",
+            "stderr": "",
         }
         sb.terminate()
 
@@ -229,7 +166,7 @@ class TestRealModalSandbox:
         """
         )
         res = sb.run_code(slow_command)
-        assert res['stdout'] == 'Hello, world!\n'
+        assert res["stdout"] == "Hello, world!\n"
         sb.terminate()
 
     def test_timeout_kills_sandbox_despite_activity(self):
@@ -260,7 +197,7 @@ class TestRealModalSandbox:
         # sandbox should stay alive
         for i in range(3):
             resp = sb.run_code(f"print('iteration {i}')")
-            assert f'iteration {i}' in resp['stdout']
+            assert f"iteration {i}" in resp["stdout"]
             time.sleep(7)
 
         sb.terminate()
@@ -277,13 +214,13 @@ class TestRealModalSandbox:
         try:
             for i in range(50):
                 sb = Sandbox(timeout=10, idle_timeout=10)
-                sb.run_code('x=1')
-                print(f'Successfully ran code {i}')
+                sb.run_code("x=1")
+                print(f"Successfully ran code {i}")
                 sb.terminate()
         except Exception as e:
             exception = e
 
-        assert exception is None, f'Expected no exception, but got {exception}'
+        assert exception is None, f"Expected no exception, but got {exception}"
 
 
 class TestMockedModalSandbox:
@@ -295,7 +232,7 @@ class TestMockedModalSandbox:
     @pytest.fixture(autouse=True)
     def mock_time_sleep(self):
         # mock time.sleep to avoid actual delays
-        with patch('time.sleep') as mock_sleep:
+        with patch("time.sleep") as mock_sleep:
             mock_sleep.return_value = None
             yield mock_sleep
 
@@ -303,23 +240,19 @@ class TestMockedModalSandbox:
     def mock_sandbox(self):
         """Fixture that mocks Modal sandbox creation to avoid real API calls."""
         with (
-            patch(
-                'vision_ai_backend.controllers.intents.coding_agent.modal_sandbox.modal.App.lookup'
-            ) as mock_app_lookup,
-            patch(
-                'vision_ai_backend.controllers.intents.coding_agent.modal_sandbox.modal.Sandbox.create'
-            ) as mock_sandbox_create,
+            patch("agents.coding_sandbox.modal.App.lookup") as mock_app_lookup,
+            patch("agents.coding_sandbox.modal.Sandbox.create") as mock_sandbox_create,
         ):
             mock_app = MagicMock()
             mock_app_lookup.return_value = mock_app
 
-            mock_sb = MagicMock(object_id='test-sandbox-id')
+            mock_sb = MagicMock(object_id="test-sandbox-id")
             mock_sandbox_create.return_value = mock_sb
 
             yield mock_sb
 
     def test_open_sandbox_file_retries_on_filesystem_execution_error(self, mock_sandbox):
-        code_snippet = 'x=1'
+        code_snippet = "x=1"
         mock_file = StringIO(code_snippet)
 
         mock_sandbox.open.side_effect = [
@@ -331,7 +264,7 @@ class TestMockedModalSandbox:
 
         sb = Sandbox()
 
-        with sb._open_sandbox_file('/test/file.txt', 'r', max_attempts=10) as f:
+        with sb._open_sandbox_file("/test/file.txt", "r", max_attempts=10) as f:
             content = f.read()
             assert content == code_snippet
 
@@ -343,13 +276,13 @@ class TestMockedModalSandbox:
         sb = Sandbox()
 
         with pytest.raises(modal.exception.FilesystemExecutionError):
-            with sb._open_sandbox_file('/test/file.txt', 'r', max_attempts=1) as _f:
+            with sb._open_sandbox_file("/test/file.txt", "r", max_attempts=1) as _f:
                 pass
 
         assert mock_sandbox.open.call_count == 1
 
     def test_open_sandbox_file_accepts_extra_exceptions(self, mock_sandbox):
-        code_snippet = 'x=1'
+        code_snippet = "x=1"
         mock_file = StringIO(code_snippet)
 
         mock_sandbox.open.side_effect = [
@@ -360,9 +293,7 @@ class TestMockedModalSandbox:
 
         sb = Sandbox()
 
-        with sb._open_sandbox_file(
-            '/test/file.txt', 'r', max_attempts=10, extra_exceptions=(FileNotFoundError,)
-        ) as f:
+        with sb._open_sandbox_file("/test/file.txt", "r", max_attempts=10, extra_exceptions=(FileNotFoundError,)) as f:
             content = f.read()
             assert content == code_snippet
 
@@ -374,7 +305,7 @@ class TestMockedModalSandbox:
         sb = Sandbox()
 
         with pytest.raises(ValueError):
-            with sb._open_sandbox_file('/test/file.txt', 'r', max_attempts=10) as _f:
+            with sb._open_sandbox_file("/test/file.txt", "r", max_attempts=10) as _f:
                 pass
 
         assert mock_sandbox.open.call_count == 1
