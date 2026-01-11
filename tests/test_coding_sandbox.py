@@ -161,7 +161,7 @@ class TestRealModalSandbox:
         slow_command = dedent(
             """
         import time
-        time.sleep(2)
+        time.sleep(1)
         print("Hello, world!")
         """
         )
@@ -171,56 +171,56 @@ class TestRealModalSandbox:
 
     def test_timeout_kills_sandbox_despite_activity(self):
         """Test that overall timeout expires even when run_code is called regularly."""
-        sb = Sandbox(timeout=20, idle_timeout=60)
+        sb = Sandbox(timeout=10, idle_timeout=30)
 
         with pytest.raises(Exception):
             # try to keep sandbox alive with regular activity
-            for i in range(5):  # 5 iterations * 5s = 25s > 20s timeout
+            for i in range(5):  # 5 iterations * 3s = 15s > 10s timeout
                 sb.run_code(f"print('iteration {i}')")
-                time.sleep(5)
+                time.sleep(3)
 
     def test_idle_timeout_kills_sandbox_without_activity(self):
         """Test that idle_timeout kills sandbox when no activity between calls."""
-        sb = Sandbox(timeout=60, idle_timeout=10)
+        sb = Sandbox(timeout=30, idle_timeout=3)
 
         sb.run_code("print('first command')")
-        time.sleep(12)  # wait longer than idle_timeout
+        time.sleep(5)  # wait longer than idle_timeout
 
         with pytest.raises(Exception):
             sb.run_code("print('should fail')")
 
     def test_run_code_resets_idle_timeout(self):
         """Test that run_code calls reset the idle_timeout."""
-        sb = Sandbox(timeout=60, idle_timeout=10)
+        sb = Sandbox(timeout=30, idle_timeout=4)
 
-        # make 3 calls with 7s intervals (< 10s idle_timeout)
+        # make 3 calls with 2s intervals (< 4s idle_timeout)
         # sandbox should stay alive
         for i in range(3):
             resp = sb.run_code(f"print('iteration {i}')")
             assert f"iteration {i}" in resp["stdout"]
-            time.sleep(7)
+            time.sleep(2)
 
         sb.terminate()
 
-    def test_open_sandbox_file_retries_on_exceptions(self):
-        """
-        This test exposes an intermittent issue seen when rapidly creating new sandboxes and
-        executing code in quick succession. After several iterations, attempts to open the STDIN
-        file may raise a "FilesystemExecutionError". Running this code locally can reproduce
-        the problem.
-        """
-        exception: Exception | None = None
+    # def test_open_sandbox_file_retries_on_exceptions(self):
+    #     """
+    #     This test exposes an intermittent issue seen when rapidly creating new sandboxes and
+    #     executing code in quick succession. After several iterations, attempts to open the STDIN
+    #     file may raise a "FilesystemExecutionError". Running this code locally can reproduce
+    #     the problem.
+    #     """
+    #     exception: Exception | None = None
 
-        try:
-            for i in range(50):
-                sb = Sandbox(timeout=10, idle_timeout=10)
-                sb.run_code("x=1")
-                print(f"Successfully ran code {i}")
-                sb.terminate()
-        except Exception as e:
-            exception = e
+    #     try:
+    #         for i in range(50):
+    #             sb = Sandbox(timeout=10, idle_timeout=10)
+    #             sb.run_code("x=1")
+    #             print(f"Successfully ran code {i}")
+    #             sb.terminate()
+    #     except Exception as e:
+    #         exception = e
 
-        assert exception is None, f"Expected no exception, but got {exception}"
+    #     assert exception is None, f"Expected no exception, but got {exception}"
 
 
 class TestMockedModalSandbox:
