@@ -38,8 +38,8 @@ Get current weather for a city.
 
 ## Guidelines
 
+- **Always narrate before acting** — Before every tool call, explain what you're about to do and why. Never make a silent tool call.
 - Be concise and direct.
-- Briefly describe what you're doing before taking action.
 - After completing a task, summarize what was accomplished.
 - If something fails, diagnose the issue and try a different approach.
 """
