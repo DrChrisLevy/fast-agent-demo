@@ -13,10 +13,12 @@ from agents.tools import reset_sandbox
 from agents.ui import (
     ChatMessage,
     ChatInput,
+    TraceMessage,
     TraceView,
     TraceUpdate,
     ThinkingIndicator,
 )
+from agents.prompts import SYSTEM_PROMPT
 
 load_dotenv(dotenv_path="plash.env")
 
@@ -149,10 +151,14 @@ def send_message(message: str):
     if not message.strip():
         return ""
 
+    # Ensure system prompt exists (so trace shows it before agent runs)
+    if not MESSAGES or MESSAGES[0].get("role") != "system":
+        MESSAGES.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+
     # Add user message to history
     MESSAGES.append({"role": "user", "content": message})
 
-    # Return user message + SSE container + trace update
+    # Return user message + SSE container + trace update (shows system + user)
     return (
         Div(ChatMessage("user", message), id="chat-container", hx_swap_oob="beforeend"),
         Div(
@@ -185,7 +191,7 @@ async def agent_stream():
     async def event_stream():
         for msg in run_agent(MESSAGES):
             if is_final_response(msg):
-                # Final response: add to chat, clear response area, update trace
+                # Final response: append to chat, clear thinking indicator, append to trace
                 content = msg.get("content") if isinstance(msg, dict) else msg.content
                 yield sse_message(
                     Div(
@@ -195,15 +201,22 @@ async def agent_stream():
                             hx_swap_oob="beforeend",
                         ),
                         Div(id="response-area", hx_swap_oob="true"),
-                        TraceUpdate(MESSAGES),
+                        Div(
+                            TraceMessage(msg),
+                            id="trace-container",
+                            hx_swap_oob="beforeend",
+                        ),
                     ),
                     event="AgentEvent",
                 )
                 await sleep(0.01)
                 yield sse_message(Div(), event="close")
             else:
-                # Intermediate (tool calls or tool results): just update trace
-                yield sse_message(TraceUpdate(MESSAGES), event="AgentEvent")
+                # Intermediate (tool calls or tool results): append just this message to trace
+                yield sse_message(
+                    Div(TraceMessage(msg), id="trace-container", hx_swap_oob="beforeend"),
+                    event="AgentEvent",
+                )
                 await sleep(0.01)
 
     return EventStream(event_stream())

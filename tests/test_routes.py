@@ -94,9 +94,11 @@ class TestChatRoute:
     def test_valid_message_adds_to_history(self, web_app, client):
         client.get("/")  # Clear messages first
         client.post("/chat", data={"message": "Hello agent"})
-        assert len(web_app.MESSAGES) == 1
-        assert web_app.MESSAGES[0]["role"] == "user"
-        assert web_app.MESSAGES[0]["content"] == "Hello agent"
+        # Should have system prompt + user message
+        assert len(web_app.MESSAGES) == 2
+        assert web_app.MESSAGES[0]["role"] == "system"
+        assert web_app.MESSAGES[1]["role"] == "user"
+        assert web_app.MESSAGES[1]["content"] == "Hello agent"
 
     def test_valid_message_returns_chat_bubble(self, client):
         client.get("/")  # Clear first
