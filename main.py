@@ -35,6 +35,8 @@ def before(req, sess):
 beforeware = Beforeware(before, skip=[])
 
 hdrs = (
+    # Favicon
+    Link(rel="icon", type="image/x-icon", href="/static/favicon.ico"),
     # DaisyUI + Tailwind
     Link(href="https://cdn.jsdelivr.net/npm/daisyui@5/daisyui.css", rel="stylesheet"),
     Link(href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css", rel="stylesheet"),
@@ -64,7 +66,7 @@ def index():
     MESSAGES = []
     reset_sandbox()
 
-    return Div(
+    return Title("FastAgent"), Div(
         # Header - DaisyUI navbar
         Nav(
             Div(H1("Agent Chat", cls="text-xl font-bold"), cls="navbar-start"),
