@@ -2,10 +2,13 @@
 Tool definitions and implementations for the agent.
 """
 
+import asyncio
+
 from agents.coding_sandbox import ModalSandbox
 
 # Lazy-initialized sandbox instance
 _sandbox: ModalSandbox | None = None
+_sandbox_lock = asyncio.Lock()
 
 
 def get_sandbox() -> ModalSandbox:
@@ -17,14 +20,33 @@ def get_sandbox() -> ModalSandbox:
 
 
 def reset_sandbox() -> None:
-    """Terminate and reset the sandbox for a fresh conversation."""
+    """Terminate and clear the sandbox (sync, no lock)."""
     global _sandbox
     if _sandbox is not None:
         try:
             _sandbox.terminate()
         except Exception:
-            pass  # Ignore errors during termination
+            pass
         _sandbox = None
+
+
+async def init_sandbox() -> None:
+    """Initialize a fresh sandbox (terminate existing one first).
+
+    Uses a lock to ensure only one sandbox exists at a time.
+    """
+    global _sandbox
+    async with _sandbox_lock:
+        # Terminate existing sandbox if any
+        if _sandbox is not None:
+            try:
+                _sandbox.terminate()
+            except Exception:
+                pass
+            _sandbox = None
+        # Create new sandbox in executor to not block event loop
+        loop = asyncio.get_running_loop()
+        _sandbox = await loop.run_in_executor(None, ModalSandbox)
 
 
 # Define tools the agent can use

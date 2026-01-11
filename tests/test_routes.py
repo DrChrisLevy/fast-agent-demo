@@ -1,20 +1,28 @@
 """Tests for web routes/endpoints."""
 
 import importlib
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from starlette.testclient import TestClient
 
 
 @pytest.fixture
-def web_app(monkeypatch):
+def mock_init_sandbox():
+    """Mock init_sandbox to avoid creating real Modal sandboxes during tests."""
+    return AsyncMock()
+
+
+@pytest.fixture
+def web_app(monkeypatch, mock_init_sandbox):
     """Create a fresh app instance for testing."""
     monkeypatch.setenv("FAST_APP_SECRET", "test-secret")
+    monkeypatch.setattr("agents.tools.init_sandbox", mock_init_sandbox)
 
     import main as main_module
 
     importlib.reload(main_module)
+    main_module._mock_init_sandbox = mock_init_sandbox  # Expose for assertions
     return main_module
 
 
@@ -60,6 +68,11 @@ class TestIndexRoute:
         client.get("/")
         assert len(web_app.MESSAGES) == 0
 
+    def test_index_initializes_sandbox(self, web_app, client):
+        web_app._mock_init_sandbox.reset_mock()
+        client.get("/")
+        web_app._mock_init_sandbox.assert_called_once()
+
 
 class TestClearRoute:
     """Tests for POST /clear"""
@@ -72,6 +85,11 @@ class TestClearRoute:
         web_app.MESSAGES.append({"role": "user", "content": "test"})
         client.post("/clear")
         assert len(web_app.MESSAGES) == 0
+
+    def test_clear_initializes_sandbox(self, web_app, client):
+        web_app._mock_init_sandbox.reset_mock()
+        client.post("/clear")
+        web_app._mock_init_sandbox.assert_called_once()
 
     def test_clear_returns_empty_trace(self, client):
         resp = client.post("/clear")

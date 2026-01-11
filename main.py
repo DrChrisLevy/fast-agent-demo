@@ -5,11 +5,12 @@ Agent Chat Web App
 A hackable interface for working with agents - see chat, tool calls, and traces.
 """
 
-from asyncio import sleep
+import asyncio
+
 from dotenv import load_dotenv
 from fasthtml.common import *
 from agents.agent import run_agent
-from agents.tools import reset_sandbox
+from agents.tools import init_sandbox
 from agents.ui import (
     ChatMessage,
     ChatInput,
@@ -62,11 +63,12 @@ app, rt = fast_app(
 
 
 @rt("/", methods=["GET"])
-def index():
+async def index():
     global MESSAGES
     # Clear messages on page load (refresh = clear)
     MESSAGES = []
-    reset_sandbox()
+    # Initialize sandbox in background (terminate old, create new)
+    asyncio.create_task(init_sandbox())
 
     return Title("FastAgent"), Div(
         # Header - DaisyUI navbar
@@ -125,10 +127,11 @@ def index():
 
 
 @rt("/clear", methods=["POST"])
-def clear_chat():
+async def clear_chat():
     global MESSAGES
     MESSAGES = []
-    reset_sandbox()
+    # Initialize sandbox in background (terminate old, create new)
+    asyncio.create_task(init_sandbox())
     return (
         "",  # Clear chat container
         Div(
@@ -210,12 +213,12 @@ async def agent_stream():
                     ),
                     event="AgentEvent",
                 )
-                await sleep(0.01)
+                await asyncio.sleep(0.01)
                 yield sse_message(Div(), event="close")
             else:
                 # Intermediate (tool calls or tool results): append just this message to trace
                 yield sse_message(TraceAppend(msg), event="AgentEvent")
-                await sleep(0.01)
+                await asyncio.sleep(0.01)
 
     return EventStream(event_stream())
 
