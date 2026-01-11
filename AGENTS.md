@@ -33,8 +33,8 @@ Run `./dev lint` after finishing code changes to lint the code.
 
 Run `./dev test` to run the test suite. This skips slow integration tests by default.
 
-- `./dev test` - Run all tests (skips `@pytest.mark.slow`)
+- `./dev test` - Run tests (skips `@pytest.mark.slow`)
 - `./dev test -m slow` - Run only slow integration tests (hits real APIs)
-- `./dev test -v` - Verbose output
-- `./dev cov` - Run tests with coverage report
+- `./dev test -m ""` - Run ALL tests (including slow)
+- `./dev test --cov=agents --cov=main --cov-report=term-missing` - Run with coverage
 

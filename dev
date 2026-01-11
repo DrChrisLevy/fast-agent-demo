@@ -7,7 +7,6 @@ Usage: ./dev <command> [args...]
 
 Commands:
   test [pytest-args...]   Run tests (skips slow tests by default)
-  cov                     Run tests with coverage report
   lint                    Run ruff check --fix and ruff format
 EOF
 }
@@ -35,11 +34,6 @@ case "$cmd" in
     else
       uv run pytest tests -m "not slow" "$@"
     fi
-    ;;
-  cov)
-    uv run pytest tests -m "not slow" --cov=agents --cov=main --cov-report=term-missing --cov-report=html "$@"
-    echo ""
-    echo "HTML report: file://$(pwd)/htmlcov/index.html"
     ;;
   lint)
     uv run ruff check --fix .

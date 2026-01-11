@@ -20,14 +20,14 @@ uv run python main.py
 # Run tests (skips slow integration tests by default)
 ./dev test
 
-# Run all tests including integration tests that hit real APIs
+# Run only slow integration tests (hits real APIs)
 ./dev test -m slow
 
-# Run tests with verbose output
-./dev test -v
+# Run ALL tests (including slow)
+./dev test -m ""
 
-# Run tests with coverage report
-./dev cov
+# Run tests with coverage
+./dev test --cov=agents --cov=main --cov-report=term-missing
 
 # Lint and format
 ./dev lint
