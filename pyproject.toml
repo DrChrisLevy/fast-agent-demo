@@ -18,7 +18,17 @@ dependencies = [
 dev = [
     "ipython>=9.9.0",
     "notebook>=7.5.1",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
     "ruff>=0.14.11",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: long-running tests (skipped by default in ./dev test)",
+]
+filterwarnings = [
+    "ignore::UserWarning:pydantic",
 ]
 
 [tool.ruff]

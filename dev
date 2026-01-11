@@ -2,12 +2,14 @@
 set -euo pipefail
 
 usage() {
-  cat <<'USAGE'
+  cat <<'EOF'
 Usage: ./dev <command> [args...]
 
 Commands:
+  test [pytest-args...]   Run tests (skips slow tests by default)
+  cov                     Run tests with coverage report
   lint                    Run ruff check --fix and ruff format
-USAGE
+EOF
 }
 
 if [ "$#" -lt 1 ]; then
@@ -19,6 +21,26 @@ cmd="$1"
 shift
 
 case "$cmd" in
+  test)
+    has_mark=0
+    for arg in "$@"; do
+      if [[ "$arg" == "-m" ]] || [[ "$arg" == -m* ]] || [[ "$arg" == "--markexpr" ]] || [[ "$arg" == --markexpr=* ]]; then
+        has_mark=1
+        break
+      fi
+    done
+
+    if [ "$has_mark" -eq 1 ]; then
+      uv run pytest tests "$@"
+    else
+      uv run pytest tests -m "not slow" "$@"
+    fi
+    ;;
+  cov)
+    uv run pytest tests -m "not slow" --cov=agents --cov=main --cov-report=term-missing --cov-report=html "$@"
+    echo ""
+    echo "HTML report: file://$(pwd)/htmlcov/index.html"
+    ;;
   lint)
     uv run ruff check --fix .
     uv run ruff format .

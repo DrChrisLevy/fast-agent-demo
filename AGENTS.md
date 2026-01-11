@@ -1,16 +1,40 @@
-Use FastHTML. See these links https://fastht.ml/docs/llms.txt and visit appropriate docs.
-Also be sure to use only DaisyUI so that themes works. Use proper DaisyUI components.
+## Project Structure
 
-## No Custom JavaScript
+```
+agents/
+  agent.py           # Agent loop
+  tools.py           # Tool definitions
+  coding_sandbox.py  # Modal sandbox for code execution
+  ui/                # UI components
+    components.py    # Chat, trace, input components
+    markdown.py      # Markdown rendering
+    tool_renderers.py # Custom tool display
+tests/               # pytest tests
+main.py              # FastHTML app and routes
+```
 
-Embrace the power of HTMX. Do NOT write custom JavaScript for interactivity. HTMX provides declarative attributes for almost everything:
 
-- Use `hx_trigger` for keyboard shortcuts (e.g., `hx_trigger="keydown[metaKey&&key=='Enter']"`)
-- Use `hx_post`, `hx_get`, `hx_target`, `hx_swap` for all requests
-- Use `hx_include` to include form values from other elements
-- Use `hx-on::after-request` for post-request cleanup (clearing inputs, etc.)
-- Use OOB swaps (`hx_swap_oob="true"`) for updating multiple parts of the page
+## No Custom JavaScript, use FastHTML and HTMX
 
-If you find yourself writing inline JS event handlers or `<script>` tags for interactivity, stop and find the HTMX way. The only acceptable JS is minimal one-liners for things HTMX genuinely can't do (like `this.value = ''`).
+Use FastHTML. See these links https://fastht.ml/docs/llms.txt and visit appropriate docs if you are unsure.
+Also be sure to use only DaisyUI so that themes works. Use proper DaisyUI components everywhere.
+If unsure visit https://daisyui.com/llms.txt
+
+
+Embrace the power of HTMX. Do NOT write custom JavaScript for interactivity. HTMX provides declarative attributes for almost everything. Make use of `hx_trigger`, `hx_post`, `hx_get`, `hx_target`, `hx_swap`, `hx_include`, `hx_swap_oob`, etc.
+
+If you find yourself writing inline JS event handlers or `<script>` tags for interactivity, stop and find the HTMX way. The only acceptable JS is minimal one-liners for things HTMX genuinely can't do.
+
+## Linting
 
 Run `./dev lint` after finishing code changes to lint the code.
+
+## Testing
+
+Run `./dev test` to run the test suite. This skips slow integration tests by default.
+
+- `./dev test` - Run all tests (skips `@pytest.mark.slow`)
+- `./dev test -m slow` - Run only slow integration tests (hits real APIs)
+- `./dev test -v` - Verbose output
+- `./dev cov` - Run tests with coverage report
+
