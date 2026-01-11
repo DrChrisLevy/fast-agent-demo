@@ -177,7 +177,7 @@ async def agent_stream():
 
     async def event_stream():
         for event in run_agent(MESSAGES):
-            if event["type"] in ("tool_call", "tool_result"):
+            if event["type"] in ("tool_call", "tool_result", "thinking"):
                 # Just update the trace panel, keep thinking indicator on left
                 yield sse_message(TraceUpdate(MESSAGES), event="AgentEvent")
                 await sleep(0.01)

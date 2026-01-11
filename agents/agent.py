@@ -8,6 +8,7 @@ No abstractions. No bells and whistles. Just the core loop.
 import json
 from dotenv import load_dotenv
 from agents.tools import TOOLS, TOOL_FUNCTIONS
+from agents.prompts import SYSTEM_PROMPT
 import litellm
 import warnings
 
@@ -25,12 +26,12 @@ def run_agent(messages):
       - {"type": "response", "data": {"content": ...}}
     """
     if not messages or messages[0].get("role") != "system":
-        messages.insert(0, {"role": "system", "content": "You are a helpful assistant."})
+        messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
 
     while True:
         # Call the LLM
         response = litellm.completion(
-            model="gpt-5.2",  # "gemini/gemini-3-flash-preview", #claude-opus-4-5-20251101, gpt-5.2
+            model="claude-opus-4-5-20251101",  # "gemini/gemini-3-flash-preview", #claude-opus-4-5-20251101, gpt-5.2
             messages=messages,
             tools=TOOLS,
             reasoning_effort="low",
@@ -47,6 +48,10 @@ def run_agent(messages):
 
         # Otherwise, process tool calls
         messages.append(message)  # Add assistant message with tool calls
+
+        # Yield assistant content if present (some models include text alongside tool calls)
+        if message.content:
+            yield {"type": "thinking", "data": {"content": message.content}}
 
         # Execute tool and append result
         for tool_call in message.tool_calls:

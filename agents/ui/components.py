@@ -52,6 +52,18 @@ def TraceMessage(msg):
         tool_calls = getattr(msg, "tool_calls", None) or msg.get("tool_calls")
         if tool_calls:
             # Assistant message with tool calls
+            parts = []
+
+            # Show assistant content if present (some models include text alongside tool calls)
+            msg_content = getattr(msg, "content", None) or msg.get("content")
+            if msg_content:
+                parts.append(
+                    Pre(
+                        msg_content,
+                        cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded mb-2",
+                    )
+                )
+
             calls_display = []
             for tc in tool_calls:
                 # Handle both object and dict formats
@@ -68,12 +80,16 @@ def TraceMessage(msg):
 
             # Parallel calls: display side-by-side in a grid
             if len(calls_display) > 1:
-                content = Div(
-                    Span("⚡ parallel", cls="text-xs opacity-50 mb-1 block"),
-                    Div(*calls_display, cls="grid grid-cols-2 gap-2"),
+                parts.append(
+                    Div(
+                        Span("⚡ parallel", cls="text-xs opacity-50 mb-1 block"),
+                        Div(*calls_display, cls="grid grid-cols-2 gap-2"),
+                    )
                 )
             else:
-                content = Div(*calls_display)
+                parts.extend(calls_display)
+
+            content = Div(*parts)
         else:
             # Regular assistant response
             content = Pre(
