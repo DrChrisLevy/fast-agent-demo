@@ -103,8 +103,6 @@ def index():
                 cls="flex flex-col min-h-0 border-r border-base-300 bg-base-200",
             ),
             # RIGHT SIDE - Message trace view
-            # NOTE: OOB swaps reset scroll position and HTMX scroll modifiers don't work with OOB.
-            # This after-swap handler on the parent is the workaround to keep trace scrolled to bottom.
             Div(
                 Div(
                     Span(
@@ -119,9 +117,6 @@ def index():
                     cls="overflow-y-auto flex-1 min-h-0",
                 ),
                 cls="flex flex-col min-h-0 bg-base-100",
-                **{
-                    "hx-on:htmx:after-swap": "document.getElementById('trace-container').scrollTop = document.getElementById('trace-container').scrollHeight"
-                },
             ),
             cls="grid grid-cols-2 flex-1 min-h-0",
         ),
@@ -184,6 +179,16 @@ def is_final_response(msg):
     return role == "assistant" and not tool_calls
 
 
+def TraceAppend(msg):
+    """Append a message to trace with auto-scroll to bottom."""
+    scroll_js = "let c = document.getElementById('trace-container'); c.scrollTop = c.scrollHeight;"
+    return Div(
+        Div(TraceMessage(msg), **{"hx-on::load": scroll_js}),
+        id="trace-container",
+        hx_swap_oob="beforeend",
+    )
+
+
 @rt("/agent-stream", methods=["GET"])
 async def agent_stream():
     """SSE endpoint that streams agent messages."""
@@ -201,11 +206,7 @@ async def agent_stream():
                             hx_swap_oob="beforeend",
                         ),
                         Div(id="response-area", hx_swap_oob="true"),
-                        Div(
-                            TraceMessage(msg),
-                            id="trace-container",
-                            hx_swap_oob="beforeend",
-                        ),
+                        TraceAppend(msg),
                     ),
                     event="AgentEvent",
                 )
@@ -213,10 +214,7 @@ async def agent_stream():
                 yield sse_message(Div(), event="close")
             else:
                 # Intermediate (tool calls or tool results): append just this message to trace
-                yield sse_message(
-                    Div(TraceMessage(msg), id="trace-container", hx_swap_oob="beforeend"),
-                    event="AgentEvent",
-                )
+                yield sse_message(TraceAppend(msg), event="AgentEvent")
                 await sleep(0.01)
 
     return EventStream(event_stream())
