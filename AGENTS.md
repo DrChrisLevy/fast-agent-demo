@@ -25,6 +25,15 @@ Embrace the power of HTMX. Do NOT write custom JavaScript for interactivity. HTM
 
 If you find yourself writing inline JS event handlers or `<script>` tags for interactivity, stop and find the HTMX way. The only acceptable JS is minimal one-liners for things HTMX genuinely can't do.
 
+
+## Database
+
+This app uses https://github.com/AnswerDotAI/fastlite for the database.
+
+## LLM
+This app uses https://docs.litellm.ai/docs/ for the LLM API.
+
+
 ## Linting
 
 Run `./dev lint` after finishing code changes to lint the code.

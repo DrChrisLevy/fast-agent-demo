@@ -18,7 +18,7 @@ from agents.ui import (
     ThinkingIndicator,
 )
 
-load_dotenv()
+load_dotenv(dotenv_path="plash.env")
 
 # Global in-memory message history (reset on refresh/clear)
 MESSAGES = []
