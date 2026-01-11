@@ -1,17 +1,30 @@
 # ruff: noqa: F403, F405
+"""
+Agent Chat Web App
 
-import json
+A hackable interface for working with agents - see chat, tool calls, and traces.
+"""
+
 from asyncio import sleep
 from dotenv import load_dotenv
 from fasthtml.common import *
 from agents.agent import run_agent
 from agents.tools import reset_sandbox
-from components import render_md
+from agents.ui import (
+    ChatMessage,
+    ChatInput,
+    TraceView,
+    TraceUpdate,
+    ThinkingIndicator,
+)
 
 load_dotenv()
 
 # Global in-memory message history (reset on refresh/clear)
 MESSAGES = []
+
+
+# ============ App Setup ============
 
 
 def before(req, sess):
@@ -39,199 +52,6 @@ app, rt = fast_app(
     secret_key=os.getenv("FAST_APP_SECRET"),
     max_age=365 * 24 * 3600,
 )
-
-
-# ============ UI Components ============
-
-
-def ChatMessage(role: str, content: str):
-    """Render a chat message bubble."""
-    is_user = role == "user"
-    rendered = render_md(content)
-    return Div(
-        Div(
-            Div(role.capitalize(), cls="chat-header opacity-70 text-xs"),
-            Div(rendered, cls=f"chat-bubble {'chat-bubble-primary' if is_user else ''}"),
-            cls=f"chat {'chat-end' if is_user else 'chat-start'}",
-        ),
-        id=f"msg-{hash(content) % 10000}",
-    )
-
-
-# Custom renderers for specific tools (tool_name -> render function)
-# Render function takes (name, args_dict) and returns an FT component
-def render_run_code(name, args):
-    """Custom renderer for run_code tool - shows code with syntax highlighting."""
-    code = args.get("code", "")
-    code_md = f"```python\n{code}\n```"
-    return Div(
-        Span(f"🔧 {name}", cls="font-mono text-primary font-bold"),
-        Div(render_md(code_md), cls="mt-1"),
-    )
-
-
-TOOL_RENDERERS = {
-    "run_code": render_run_code,
-}
-
-
-def render_tool_call(name, args_str, tc_id):
-    """Render a tool call, using custom renderer if available."""
-    try:
-        args_dict = json.loads(args_str) if isinstance(args_str, str) else args_str
-    except json.JSONDecodeError:
-        args_dict = {}
-
-    # Check for custom renderer
-    if name in TOOL_RENDERERS:
-        return Div(
-            TOOL_RENDERERS[name](name, args_dict),
-            Span(f"id: {tc_id}", cls="text-xs opacity-50"),
-            cls="mb-2",
-        )
-
-    # Default rendering
-    return Div(
-        Span(f"🔧 {name}", cls="font-mono text-primary font-bold"),
-        Pre(args_str, cls="text-xs bg-base-300 p-1 rounded mt-1 overflow-x-auto"),
-        Span(f"id: {tc_id}", cls="text-xs opacity-50"),
-        cls="mb-2",
-    )
-
-
-def TraceMessage(msg):
-    """Render a single message in the trace view with full detail."""
-    role = msg.get("role", "unknown")
-
-    # Color coding by role
-    role_colors = {
-        "system": "badge-warning",
-        "user": "badge-primary",
-        "assistant": "badge-secondary",
-        "tool": "badge-accent",
-    }
-    badge_cls = role_colors.get(role, "badge-ghost")
-
-    # Handle different message types
-    if role == "system":
-        content = Pre(
-            msg.get("content", ""),
-            cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded overflow-x-auto max-h-40 overflow-y-auto",
-        )
-    elif role == "user":
-        content = Pre(
-            msg.get("content", ""),
-            cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded",
-        )
-    elif role == "assistant":
-        # Check if it has tool_calls (could be a ChatCompletionMessage object or dict)
-        tool_calls = getattr(msg, "tool_calls", None) or msg.get("tool_calls")
-        if tool_calls:
-            # Assistant message with tool calls
-            calls_display = []
-            for tc in tool_calls:
-                # Handle both object and dict formats
-                if hasattr(tc, "function"):
-                    name = tc.function.name
-                    args = tc.function.arguments
-                    tc_id = tc.id
-                else:
-                    name = tc.get("function", {}).get("name", "?")
-                    args = tc.get("function", {}).get("arguments", "{}")
-                    tc_id = tc.get("id", "?")
-
-                calls_display.append(render_tool_call(name, args, tc_id))
-
-            # Parallel calls: display side-by-side in a grid
-            if len(calls_display) > 1:
-                content = Div(
-                    Span("⚡ parallel", cls="text-xs opacity-50 mb-1 block"),
-                    Div(*calls_display, cls="grid grid-cols-2 gap-2"),
-                )
-            else:
-                content = Div(*calls_display)
-        else:
-            # Regular assistant response
-            content = Pre(
-                msg.get("content", ""),
-                cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded",
-            )
-    elif role == "tool":
-        tool_call_id = msg.get("tool_call_id", "?")
-        content = Div(
-            Span(f"tool_call_id: {tool_call_id}", cls="text-xs opacity-50 block mb-1"),
-            Pre(
-                msg.get("content", ""),
-                cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded max-h-32 overflow-y-auto",
-            ),
-        )
-    else:
-        content = Pre(
-            json.dumps(msg, indent=2, default=str),
-            cls="text-xs bg-base-300 p-2 rounded",
-        )
-
-    return Div(
-        Div(Span(role.upper(), cls=f"badge {badge_cls} badge-sm"), cls="mb-1"),
-        content,
-        cls="border-l-2 border-base-300 pl-3 py-2 mb-2",
-    )
-
-
-def TraceView(messages):
-    """Render the full message trace."""
-    if not messages:
-        return Div(Span("No messages yet", cls="text-sm opacity-50"), cls="p-4")
-
-    return Div(*[TraceMessage(m) for m in messages], cls="p-4")
-
-
-def ChatInput():
-    """The chat input form with multiline support. Cmd+Enter to send."""
-    return Div(
-        Textarea(
-            name="message",
-            placeholder="Ask something... (Cmd+Enter to send)",
-            rows=3,
-            cls="textarea textarea-bordered flex-1 resize-none text-base leading-relaxed",
-            autofocus=True,
-            hx_post="/chat",
-            hx_target="#chat-target",
-            hx_swap="none",
-            hx_trigger="keydown[metaKey&&key=='Enter'], keydown[ctrlKey&&key=='Enter']",
-            **{"hx-on::after-request": "this.value = ''"},
-        ),
-        Button(
-            "Send",
-            cls="btn btn-primary self-end",
-            hx_post="/chat",
-            hx_target="#chat-target",
-            hx_swap="none",
-            hx_include="[name='message']",
-            **{"hx-on::after-request": "document.querySelector('[name=message]').value = ''"},
-        ),
-        Div(id="chat-target"),
-        cls="flex gap-3 items-end w-full",
-    )
-
-
-def ThinkingIndicator():
-    """Loading indicator shown while agent is thinking."""
-    return Div(
-        Span(cls="loading loading-dots loading-sm"),
-        Span("Agent is thinking...", cls="ml-2 text-sm opacity-70"),
-        cls="flex items-center py-2",
-    )
-
-
-def TraceUpdate():
-    """OOB swap to update trace panel."""
-    return Div(
-        TraceView(MESSAGES),
-        id="trace-container",
-        hx_swap_oob="true",
-        cls="overflow-y-auto flex-1 min-h-0",
-    )
 
 
 # ============ Routes ============
@@ -345,7 +165,7 @@ def send_message(message: str):
             id="response-area",
             hx_swap_oob="true",
         ),
-        TraceUpdate(),
+        TraceUpdate(MESSAGES),
     )
 
 
@@ -357,7 +177,7 @@ async def agent_stream():
         for event in run_agent(MESSAGES):
             if event["type"] in ("tool_call", "tool_result"):
                 # Just update the trace panel, keep thinking indicator on left
-                yield sse_message(TraceUpdate(), event="AgentEvent")
+                yield sse_message(TraceUpdate(MESSAGES), event="AgentEvent")
                 await sleep(0.01)
 
             elif event["type"] == "response":
@@ -370,7 +190,7 @@ async def agent_stream():
                             hx_swap_oob="beforeend",
                         ),
                         Div(id="response-area", hx_swap_oob="true"),
-                        TraceUpdate(),
+                        TraceUpdate(MESSAGES),
                     ),
                     event="AgentEvent",
                 )
