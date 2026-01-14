@@ -24,9 +24,15 @@ def run_agent(messages):
       - {"role": "assistant", "tool_calls": [...], ...}  # Assistant requesting tool calls
       - {"role": "tool", "tool_call_id": ..., "content": ...}  # Tool result
       - {"role": "assistant", "content": ...}  # Final response (no tool_calls)
+
+    Also yields usage updates:
+      - {"type": "usage", "prompt_tokens": ..., "completion_tokens": ..., "total_tokens": ...}
     """
     if not messages or messages[0].get("role") != "system":
         messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+
+    # Track cumulative token usage across the agentic loop
+    total_tokens = 0
 
     while True:
         # Call the LLM
@@ -36,6 +42,11 @@ def run_agent(messages):
             tools=TOOLS,
             reasoning_effort="low",
         )
+
+        # Update cumulative usage
+        if response.usage:
+            total_tokens += response.usage.total_tokens or 0
+            yield {"type": "usage", "total": total_tokens}
 
         # Append assistant message (thought signatures automatically preserved)
         message = response.choices[0].message

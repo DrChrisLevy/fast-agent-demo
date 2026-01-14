@@ -76,6 +76,7 @@ async def index():
             Div(H1("Agent Chat", cls="text-xl font-bold"), cls="navbar-start"),
             Div(cls="navbar-center"),
             Div(
+                Span("0 tokens", id="token-count", cls="text-sm opacity-70 mr-4"),
                 Button(
                     "Clear",
                     hx_post="/clear",
@@ -83,7 +84,7 @@ async def index():
                     hx_swap="innerHTML",
                     cls="btn btn-ghost btn-sm",
                 ),
-                cls="navbar-end",
+                cls="navbar-end items-center",
             ),
             cls="navbar bg-base-100 border-b border-base-300",
         ),
@@ -140,6 +141,7 @@ async def clear_chat():
             hx_swap_oob="true",
             cls="overflow-y-auto flex-1 min-h-0",
         ),  # Clear trace
+        TokenCountUpdate(0),  # Reset token counter
     )
 
 
@@ -175,11 +177,26 @@ def send_message(message: str):
     )
 
 
+def is_usage_update(msg):
+    """Check if message is a usage update."""
+    return isinstance(msg, dict) and msg.get("type") == "usage"
+
+
 def is_final_response(msg):
     """Check if message is the final assistant response (no tool calls)."""
     role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "role", None)
     tool_calls = msg.get("tool_calls") if isinstance(msg, dict) else getattr(msg, "tool_calls", None)
     return role == "assistant" and not tool_calls
+
+
+def TokenCountUpdate(total_tokens):
+    """OOB update for the token count display."""
+    return Span(
+        f"{total_tokens:,} tokens",
+        id="token-count",
+        cls="text-sm opacity-70 mr-4",
+        hx_swap_oob="true",
+    )
 
 
 def TraceAppend(msg):
@@ -198,7 +215,11 @@ async def agent_stream():
 
     async def event_stream():
         for msg in run_agent(MESSAGES):
-            if is_final_response(msg):
+            if is_usage_update(msg):
+                # Usage update: update token count
+                yield sse_message(TokenCountUpdate(msg["total"]), event="AgentEvent")
+                await asyncio.sleep(0.01)
+            elif is_final_response(msg):
                 # Final response: append to chat, clear thinking indicator, append to trace
                 content = msg.get("content") if isinstance(msg, dict) else msg.content
                 yield sse_message(

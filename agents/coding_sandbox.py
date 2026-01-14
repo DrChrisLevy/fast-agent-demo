@@ -27,6 +27,10 @@ STDIN_FILE = os.path.join(IO_DATA_DIR, "stdin.txt")
 SANDBOX_TIMEOUT = 2 * 60 * 60
 # Time in seconds sandbox can be idle before being terminated (30 minutes)
 SANDBOX_IDLE_TIMEOUT = 30 * 60
+# Default CPU cores for sandbox
+SANDBOX_CPU = 4.0
+# Default memory in MiB for sandbox (4 GiB)
+SANDBOX_MEMORY = 4096
 
 
 class ModalSandbox:
@@ -64,9 +68,11 @@ class ModalSandbox:
 
         app = modal.App.lookup("python-sandbox", create_if_missing=True)
         driver_program = get_script_as_string("agents/driver_program.py")
-        # Use provided timeout/idle_timeout or fall back to defaults
+        # Use provided values or fall back to defaults
         timeout = kwargs.pop("timeout", SANDBOX_TIMEOUT)
         idle_timeout = kwargs.pop("idle_timeout", SANDBOX_IDLE_TIMEOUT)
+        cpu = kwargs.pop("cpu", SANDBOX_CPU)
+        memory = kwargs.pop("memory", SANDBOX_MEMORY)
         self.sandbox = modal.Sandbox.create(
             "python",
             "-c",
@@ -75,6 +81,8 @@ class ModalSandbox:
             app=app,
             timeout=timeout,
             idle_timeout=idle_timeout,
+            cpu=cpu,
+            memory=memory,
             **kwargs,
         )
         if init_script:
