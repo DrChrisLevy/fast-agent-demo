@@ -152,6 +152,8 @@ def _mock_llm_response(content="This is a mock response.", tool_calls=None):
 
     mock_response = MagicMock()
     mock_response.choices = [mock_choice]
+    # Mock usage with real integer for token count formatting
+    mock_response.usage.total_tokens = 100
 
     return mock_response
 
