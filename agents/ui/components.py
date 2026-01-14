@@ -98,13 +98,45 @@ def TraceMessage(msg):
             )
     elif role == "tool":
         tool_call_id = msg.get("tool_call_id", "?")
-        content = Div(
-            Span(f"tool_call_id: {tool_call_id}", cls="text-xs opacity-50 block mb-1"),
-            Pre(
-                msg.get("content", ""),
-                cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded max-h-32 overflow-y-auto",
-            ),
-        )
+        msg_content = msg.get("content", "")
+
+        # Handle content blocks (list) vs plain string
+        if isinstance(msg_content, list):
+            parts = []
+            for block in msg_content:
+                if block.get("type") == "text":
+                    parts.append(
+                        Pre(
+                            block.get("text", ""),
+                            cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded max-h-32 overflow-y-auto",
+                        )
+                    )
+                elif block.get("type") == "image_url":
+                    # Render image as thumbnail
+                    img_url = block.get("image_url", "")
+                    parts.append(
+                        Div(
+                            Img(
+                                src=img_url,
+                                cls="max-w-48 max-h-32 rounded border border-base-300 cursor-pointer hover:opacity-80",
+                                onclick="this.classList.toggle('max-w-48'); this.classList.toggle('max-w-full'); this.classList.toggle('max-h-32'); this.classList.toggle('max-h-none');",
+                            ),
+                            cls="my-2",
+                        )
+                    )
+            content = Div(
+                Span(f"tool_call_id: {tool_call_id}", cls="text-xs opacity-50 block mb-1"),
+                *parts,
+            )
+        else:
+            # Plain string content (backwards compatible)
+            content = Div(
+                Span(f"tool_call_id: {tool_call_id}", cls="text-xs opacity-50 block mb-1"),
+                Pre(
+                    msg_content,
+                    cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded max-h-32 overflow-y-auto",
+                ),
+            )
     else:
         content = Pre(
             json.dumps(msg, indent=2, default=str),

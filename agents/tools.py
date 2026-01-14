@@ -118,15 +118,32 @@ def get_weather(city: str) -> str:
     return f"The weather in {city} is 72°F and sunny."
 
 
-def run_code(code: str) -> str:
-    """Run Python code in the Modal sandbox. Returns JSON with stdout/stderr."""
-    import json
-
+def run_code(code: str) -> list:
+    """Run Python code in the Modal sandbox. Returns content blocks with text and optional images."""
     try:
         sandbox = get_sandbox()
-        return json.dumps(sandbox.run_code(code))
+        result = sandbox.run_code(code)
     except Exception as e:
-        return json.dumps({"stdout": "", "stderr": str(e)})
+        result = {"stdout": "", "stderr": str(e), "images": []}
+
+    # Build text content from stdout/stderr
+    text_parts = []
+    if result.get("stdout"):
+        text_parts.append(f"stdout:\n{result['stdout']}")
+    if result.get("stderr"):
+        text_parts.append(f"stderr:\n{result['stderr']}")
+    text_content = "\n\n".join(text_parts) if text_parts else "(no output)"
+
+    # Always return content blocks format (litellm format)
+    content = [{"type": "text", "text": text_content}]
+    for img_base64 in result.get("images", []):
+        content.append(
+            {
+                "type": "image_url",
+                "image_url": f"data:image/png;base64,{img_base64}",
+            }
+        )
+    return content
 
 
 # Map tool names to functions

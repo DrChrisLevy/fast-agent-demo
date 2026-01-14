@@ -1,9 +1,10 @@
+import base64
 import json
 import os
 import sys
 import time
 from contextlib import redirect_stderr, redirect_stdout
-from io import StringIO
+from io import BytesIO, StringIO
 from typing import Any, Generator
 
 """
@@ -62,12 +63,29 @@ for line in tail_f(STDIN_FILE):
         except Exception as e:
             print(f"{type(e).__name__}: {e}", file=sys.stderr)
 
+    # Capture any matplotlib figures as base64 images
+    images = []
+    try:
+        import matplotlib.pyplot as plt
+
+        for fig_num in plt.get_fignums():
+            fig = plt.figure(fig_num)
+            buf = BytesIO()
+            fig.savefig(buf, format="png", bbox_inches="tight", dpi=150)
+            buf.seek(0)
+            images.append(base64.b64encode(buf.read()).decode("utf-8"))
+            buf.close()
+        plt.close("all")  # Clean up figures after capturing
+    except ImportError:
+        pass  # matplotlib not available
+
     with open(os.path.join(IO_DATA_DIR, f"{command_id}.txt"), "w") as f:
         f.write(
             json.dumps(
                 {
                     "stdout": stdout_io.getvalue(),
                     "stderr": stderr_io.getvalue(),
+                    "images": images,
                 }
             )
         )

@@ -189,6 +189,39 @@ def is_final_response(msg):
     return role == "assistant" and not tool_calls
 
 
+def is_tool_result(msg):
+    """Check if message is a tool result."""
+    return isinstance(msg, dict) and msg.get("role") == "tool"
+
+
+def get_images_from_tool_result(msg):
+    """Extract image URLs from a tool result message."""
+    content = msg.get("content", "")
+    if not isinstance(content, list):
+        return []
+    return [block.get("image_url") for block in content if block.get("type") == "image_url"]
+
+
+def ChatImages(images):
+    """Render images in the chat area."""
+    if not images:
+        return None
+    return Div(
+        Div(
+            *[
+                Img(
+                    src=img_url,
+                    cls="max-w-md rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-all",
+                    onclick="this.classList.toggle('max-w-md'); this.classList.toggle('max-w-full');",
+                )
+                for img_url in images
+            ],
+            cls="flex flex-wrap gap-3",
+        ),
+        cls="chat chat-start",
+    )
+
+
 def TokenCountUpdate(total_tokens):
     """OOB update for the token count display."""
     return Span(
@@ -237,7 +270,24 @@ async def agent_stream():
                 await asyncio.sleep(0.01)
                 yield sse_message(Div(), event="close")
             else:
-                # Intermediate (tool calls or tool results): append just this message to trace
+                # Intermediate (tool calls or tool results): append to trace
+                # Also show images in chat if this is a tool result with images
+                if is_tool_result(msg):
+                    images = get_images_from_tool_result(msg)
+                    if images:
+                        yield sse_message(
+                            Div(
+                                Div(
+                                    ChatImages(images),
+                                    id="chat-container",
+                                    hx_swap_oob="beforeend",
+                                ),
+                                TraceAppend(msg),
+                            ),
+                            event="AgentEvent",
+                        )
+                        await asyncio.sleep(0.01)
+                        continue
                 yield sse_message(TraceAppend(msg), event="AgentEvent")
                 await asyncio.sleep(0.01)
 

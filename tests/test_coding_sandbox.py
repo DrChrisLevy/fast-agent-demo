@@ -27,13 +27,14 @@ class TestRealModalSandbox:
         assert resp == {
             "stdout": "Hello, World!\n",
             "stderr": "",
+            "images": [],
         }
         resp = sb.run_code("x=1")
-        assert resp == {"stdout": "", "stderr": ""}
+        assert resp == {"stdout": "", "stderr": "", "images": []}
         resp = sb.run_code("y=x+1\nprint(y)")
-        assert resp == {"stdout": "2\n", "stderr": ""}
+        assert resp == {"stdout": "2\n", "stderr": "", "images": []}
         resp = sb.run_code("z = y ** 2\nprint(z)")
-        assert resp == {"stdout": "4\n", "stderr": ""}
+        assert resp == {"stdout": "4\n", "stderr": "", "images": []}
         sb.terminate()
 
     def test_code_sandbox_test2(self):
@@ -42,6 +43,7 @@ class TestRealModalSandbox:
         assert resp == {
             "stdout": "3.14\n13.14\n",
             "stderr": "",
+            "images": [],
         }
         sb.terminate()
 
@@ -51,6 +53,7 @@ class TestRealModalSandbox:
         assert resp == {
             "stdout": "1 2 3\n",
             "stderr": "",
+            "images": [],
         }
         sb.terminate()
 
@@ -60,6 +63,7 @@ class TestRealModalSandbox:
         assert resp == {
             "stdout": "1 2 3\n",
             "stderr": "",
+            "images": [],
         }
         sb.terminate()
 
@@ -120,6 +124,7 @@ class TestRealModalSandbox:
             "stdout": "Statistics for [10, 15, 20, 25, 30]:\n  mean: 20.0\n  median: 20.0\n  "
             "std_dev: 7.0710678118654755\n  sum: 100\n  count: 5\nGeometric mean: 18.64\n",
             "stderr": "",
+            "images": [],
         }
 
         # Test 3: Handle errors gracefully
@@ -139,6 +144,7 @@ class TestRealModalSandbox:
         assert resp3 == {
             "stdout": "Caught error: ZeroDivisionError: division by zero\nExecution continues\n",
             "stderr": "",
+            "images": [],
         }
 
         sb.terminate()
@@ -153,6 +159,7 @@ class TestRealModalSandbox:
         assert resp == {
             "stdout": "6\n",
             "stderr": "",
+            "images": [],
         }
         sb.terminate()
 
@@ -167,6 +174,64 @@ class TestRealModalSandbox:
         )
         res = sb.run_code(slow_command)
         assert res["stdout"] == "Hello, world!\n"
+        sb.terminate()
+
+    def test_matplotlib_plot_returns_image(self):
+        """Test that matplotlib plots are captured and returned as base64 images."""
+        sb = Sandbox()
+        plot_code = dedent(
+            """
+        import matplotlib
+        matplotlib.use('Agg')  # Non-interactive backend
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as patches
+
+        fig, ax = plt.subplots(figsize=(4, 4))
+        rect = patches.Rectangle((0.2, 0.2), 0.6, 0.6, facecolor='blue')
+        ax.add_patch(rect)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_title('Blue Rectangle')
+        print("Plot created")
+        """
+        )
+        res = sb.run_code(plot_code)
+        assert res["stdout"] == "Plot created\n"
+        assert res["stderr"] == ""
+        assert len(res["images"]) == 1
+        # Verify it's valid base64 (should be decodable)
+        import base64
+
+        decoded = base64.b64decode(res["images"][0])
+        # PNG files start with these magic bytes
+        assert decoded[:8] == b"\x89PNG\r\n\x1a\n"
+        sb.terminate()
+
+    def test_multiple_matplotlib_plots_returns_multiple_images(self):
+        """Test that multiple matplotlib figures are all captured."""
+        sb = Sandbox()
+        plot_code = dedent(
+            """
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+
+        # Create first figure
+        fig1, ax1 = plt.subplots()
+        ax1.plot([1, 2, 3], [1, 2, 3])
+        ax1.set_title('Figure 1')
+
+        # Create second figure
+        fig2, ax2 = plt.subplots()
+        ax2.bar(['a', 'b', 'c'], [3, 2, 1])
+        ax2.set_title('Figure 2')
+
+        print("Two plots created")
+        """
+        )
+        res = sb.run_code(plot_code)
+        assert res["stdout"] == "Two plots created\n"
+        assert len(res["images"]) == 2
         sb.terminate()
 
     def test_timeout_kills_sandbox_despite_activity(self):

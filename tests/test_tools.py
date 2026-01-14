@@ -1,6 +1,5 @@
 """Tests for agents/tools.py."""
 
-import json
 from unittest.mock import MagicMock, patch
 
 import agents.tools as tools_module
@@ -128,37 +127,57 @@ class TestRunCode:
         tools_module._sandbox = None
 
     @patch("agents.tools.ModalSandbox")
-    def test_run_code_returns_json_result(self, mock_sandbox_class):
-        """run_code should return JSON-encoded sandbox output."""
+    def test_run_code_returns_content_blocks(self, mock_sandbox_class):
+        """run_code should return content blocks with text."""
         mock_instance = MagicMock()
-        mock_instance.run_code.return_value = {"stdout": "Hello\n", "stderr": ""}
+        mock_instance.run_code.return_value = {"stdout": "Hello\n", "stderr": "", "images": []}
         mock_sandbox_class.return_value = mock_instance
 
         result = run_code('print("Hello")')
 
-        assert json.loads(result) == {"stdout": "Hello\n", "stderr": ""}
+        assert isinstance(result, list)
+        assert result[0] == {"type": "text", "text": "stdout:\nHello\n"}
         mock_instance.run_code.assert_called_once_with('print("Hello")')
 
     @patch("agents.tools.ModalSandbox")
     def test_run_code_handles_sandbox_exception(self, mock_sandbox_class):
-        """run_code should return error JSON when sandbox raises exception."""
+        """run_code should return error content blocks when sandbox raises exception."""
         mock_sandbox_class.side_effect = Exception("Sandbox creation failed")
 
         result = run_code("print('test')")
 
-        parsed = json.loads(result)
-        assert parsed["stdout"] == ""
-        assert "Sandbox creation failed" in parsed["stderr"]
+        assert isinstance(result, list)
+        assert result[0]["type"] == "text"
+        assert "Sandbox creation failed" in result[0]["text"]
 
     @patch("agents.tools.ModalSandbox")
     def test_run_code_handles_execution_exception(self, mock_sandbox_class):
-        """run_code should return error JSON when code execution raises exception."""
+        """run_code should return error content blocks when code execution raises exception."""
         mock_instance = MagicMock()
         mock_instance.run_code.side_effect = Exception("Execution error")
         mock_sandbox_class.return_value = mock_instance
 
         result = run_code("invalid code")
 
-        parsed = json.loads(result)
-        assert parsed["stdout"] == ""
-        assert "Execution error" in parsed["stderr"]
+        assert isinstance(result, list)
+        assert result[0]["type"] == "text"
+        assert "Execution error" in result[0]["text"]
+
+    @patch("agents.tools.ModalSandbox")
+    def test_run_code_returns_images(self, mock_sandbox_class):
+        """run_code should include image content blocks when images are present."""
+        mock_instance = MagicMock()
+        mock_instance.run_code.return_value = {
+            "stdout": "Plot created\n",
+            "stderr": "",
+            "images": ["base64img1", "base64img2"],
+        }
+        mock_sandbox_class.return_value = mock_instance
+
+        result = run_code("import matplotlib.pyplot as plt; plt.plot([1,2,3])")
+
+        assert isinstance(result, list)
+        assert len(result) == 3  # 1 text + 2 images
+        assert result[0] == {"type": "text", "text": "stdout:\nPlot created\n"}
+        assert result[1] == {"type": "image_url", "image_url": "data:image/png;base64,base64img1"}
+        assert result[2] == {"type": "image_url", "image_url": "data:image/png;base64,base64img2"}
