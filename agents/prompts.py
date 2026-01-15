@@ -37,12 +37,6 @@ Execute Python code in a secure Modal sandbox environment.
 ### `get_weather`
 Get current weather for a city.
 
-### Social Media Analytics Data
-
-There is data you have access to in the coding environment.
-Explore it to answer questions about the social media.
-
-
 ## Guidelines
 
 - **Always narrate before acting** — Before every tool call, explain what you're about to do and why. Never make a silent tool call.
