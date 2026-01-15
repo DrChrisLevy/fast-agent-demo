@@ -26,7 +26,7 @@ def run_agent(messages):
       - {"role": "assistant", "content": ...}  # Final response (no tool_calls)
 
     Also yields usage updates:
-      - {"type": "usage", "prompt_tokens": ..., "completion_tokens": ..., "total_tokens": ...}
+      - {"type": "usage", "total": ...}  # Cumulative token count
     """
     if not messages or messages[0].get("role") != "system":
         messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
