@@ -10,34 +10,8 @@ from agents.coding_sandbox import ModalSandbox
 _sandbox: ModalSandbox | None = None
 _sandbox_lock = asyncio.Lock()
 
-# Init script to download data files into the sandbox
-INIT_SCRIPT = """
-import urllib.request
-import concurrent.futures
-
-urls = [
-    "https://dev-dashhudson-static.s3.amazonaws.com/research/chris/llm_demo/metric_details.csv",
-    "https://dev-dashhudson-static.s3.amazonaws.com/research/chris/llm_demo/1187.brand_timeseries.2025-07-10.2026-01-06.csv",
-    "https://dev-dashhudson-static.s3.amazonaws.com/research/chris/llm_demo/1187.brand_posts.YOUTUBE.2025-07-10.2026-01-06.csv",
-    "https://dev-dashhudson-static.s3.amazonaws.com/research/chris/llm_demo/1187.brand_posts.TWITTER.2025-07-10.2026-01-06.csv",
-    "https://dev-dashhudson-static.s3.amazonaws.com/research/chris/llm_demo/1187.brand_posts.TIKTOK.2025-07-10.2026-01-06.csv",
-    "https://dev-dashhudson-static.s3.amazonaws.com/research/chris/llm_demo/1187.brand_posts.PINTEREST.2025-07-10.2026-01-06.csv",
-    "https://dev-dashhudson-static.s3.amazonaws.com/research/chris/llm_demo/1187.brand_posts.LINKEDIN.2025-07-10.2026-01-06.csv",
-    "https://dev-dashhudson-static.s3.amazonaws.com/research/chris/llm_demo/1187.brand_posts.INSTAGRAM.2025-07-10.2026-01-06.csv",
-    "https://dev-dashhudson-static.s3.amazonaws.com/research/chris/llm_demo/1187.brand_posts.INSTAGRAM_UGC.2025-07-10.2026-01-06.csv",
-    "https://dev-dashhudson-static.s3.amazonaws.com/research/chris/llm_demo/1187.brand_posts.FACEBOOK.2025-07-10.2026-01-06.csv",
-]
-
-def download(url):
-    filename = url.split("/")[-1]
-    urllib.request.urlretrieve(url, filename)
-    return filename
-
-with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-    filenames = list(executor.map(download, urls))
-
-print(f"Downloaded {len(filenames)} files: {filenames}")
-"""
+# Init script to download data/files or define functions etc..
+INIT_SCRIPT = """"""
 
 
 def get_sandbox() -> ModalSandbox:
