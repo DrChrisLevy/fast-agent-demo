@@ -30,9 +30,8 @@ MESSAGES = []
 # ============ App Setup ============
 
 
-def before(req, sess):
-    print(r"running beforeware")
-    print(f"Request: {req.method} {req.url.path}")
+def before(req, sess):  # noqa: ARG001
+    pass  # Hook for request preprocessing
 
 
 beforeware = Beforeware(before, skip=[])
@@ -222,7 +221,7 @@ def ChatImages(images):
                         Img(src=img_url, cls="max-h-[80vh] max-w-full object-contain"),
                         cls="modal-box w-fit max-w-[90vw] p-4 bg-base-300",
                     ),
-                    Form(Button("", cls="cursor-default"), method="dialog", cls="modal-backdrop bg-black/80"),
+                    Form(Button("", cls="cursor-default"), method="dialog", cls="modal-backdrop bg-neutral/80"),
                     id=modal_id,
                     cls="modal modal-middle",
                 ),
