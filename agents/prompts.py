@@ -33,10 +33,7 @@ It's better to confirm intent than to make incorrect assumptions.
 
 def build_system_prompt() -> str:
     """Build the system prompt dynamically from registered tools."""
-    tool_docs = "\n\n".join(
-        f"### `{name}`\n{TOOL_INSTRUCTIONS.get(name, 'No description available.')}"
-        for name in TOOL_FUNCTIONS.keys()
-    )
+    tool_docs = "\n\n".join(f"### `{name}`\n{TOOL_INSTRUCTIONS.get(name, 'No description available.')}" for name in TOOL_FUNCTIONS.keys())
     return BASE_PROMPT.format(tool_docs=tool_docs)
 
 

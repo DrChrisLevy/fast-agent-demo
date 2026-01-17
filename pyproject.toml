@@ -33,3 +33,4 @@ filterwarnings = [
 
 [tool.ruff]
 line-length = 150
+exclude = ["junk.ipynb"]
