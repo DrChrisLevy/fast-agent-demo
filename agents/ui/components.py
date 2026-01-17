@@ -102,28 +102,50 @@ def TraceMessage(msg):
 
         # Handle content blocks (list) vs plain string
         if isinstance(msg_content, list):
-            parts = []
+            text_parts = []
+            image_parts = []
             for block in msg_content:
                 if block.get("type") == "text":
-                    parts.append(
+                    text_parts.append(
                         Pre(
                             block.get("text", ""),
                             cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded max-h-32 overflow-y-auto",
                         )
                     )
                 elif block.get("type") == "image_url":
-                    # Render image as thumbnail
+                    # Render image as thumbnail with DaisyUI modal for expansion
                     img_url = block.get("image_url", "")
-                    parts.append(
+                    modal_id = f"img-modal-{hash(img_url) % 100000}"
+                    image_parts.append(
                         Div(
                             Img(
                                 src=img_url,
-                                cls="max-w-48 max-h-32 rounded border border-base-300 cursor-pointer hover:opacity-80",
-                                onclick="this.classList.toggle('max-w-48'); this.classList.toggle('max-w-full'); this.classList.toggle('max-h-32'); this.classList.toggle('max-h-none');",
+                                cls="w-full h-auto rounded border border-base-300 cursor-pointer hover:opacity-80",
+                                onclick=f"document.getElementById('{modal_id}').showModal()",
                             ),
-                            cls="my-2",
+                            Dialog(
+                                Div(
+                                    Img(src=img_url, cls="max-h-[80vh] max-w-full object-contain"),
+                                    cls="modal-box max-w-5xl p-2 bg-base-300",
+                                ),
+                                Form(Button("", cls="cursor-default"), method="dialog", cls="modal-backdrop bg-black/80"),
+                                id=modal_id,
+                                cls="modal",
+                            ),
                         )
                     )
+
+            # Build content with text parts and image grid
+            parts = text_parts
+            if image_parts:
+                # Grid: 2 columns for thumbnails
+                parts.append(
+                    Div(
+                        *image_parts,
+                        cls="grid grid-cols-2 gap-2 my-2",
+                    )
+                )
+
             content = Div(
                 Span(f"tool_call_id: {tool_call_id}", cls="text-xs opacity-50 block mb-1"),
                 *parts,
@@ -146,7 +168,7 @@ def TraceMessage(msg):
     return Div(
         Div(Span(role.upper(), cls=f"badge {badge_cls} badge-sm"), cls="mb-1"),
         content,
-        cls="border-l-2 border-base-300 pl-3 py-2 mb-2",
+        cls="border-l-2 border-base-300 pl-3 pr-3 py-2 mb-2",
     )
 
 
