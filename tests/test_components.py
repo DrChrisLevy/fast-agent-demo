@@ -70,6 +70,51 @@ class TestTraceMessage:
         assert "badge-accent" in html
         assert "tool_call_id: 123" in html
 
+    def test_tool_message_with_image_content_blocks(self):
+        """Tool results with image content blocks should render images."""
+        msg = {
+            "role": "tool",
+            "tool_call_id": "call_456",
+            "content": [
+                {"type": "text", "text": "Plot created"},
+                {"type": "image_url", "image_url": "data:image/png;base64,ABC123"},
+            ],
+        }
+        html = render(TraceMessage(msg))
+        assert "TOOL" in html
+        assert "Plot created" in html
+        assert "<img" in html
+        assert "data:image/png;base64,ABC123" in html
+
+    def test_tool_message_with_text_only_content_blocks(self):
+        """Tool results with only text content blocks should render text."""
+        msg = {
+            "role": "tool",
+            "tool_call_id": "call_789",
+            "content": [
+                {"type": "text", "text": "stdout:\nHello World"},
+            ],
+        }
+        html = render(TraceMessage(msg))
+        assert "Hello World" in html
+        assert "<img" not in html
+
+    def test_tool_message_with_multiple_images(self):
+        """Tool results with multiple images should render all of them."""
+        msg = {
+            "role": "tool",
+            "tool_call_id": "call_multi",
+            "content": [
+                {"type": "text", "text": "Two plots"},
+                {"type": "image_url", "image_url": "data:image/png;base64,IMG1"},
+                {"type": "image_url", "image_url": "data:image/png;base64,IMG2"},
+            ],
+        }
+        html = render(TraceMessage(msg))
+        assert html.count("<img") == 2
+        assert "IMG1" in html
+        assert "IMG2" in html
+
     def test_assistant_with_tool_calls(self, sample_tool_call_message):
         html = render(TraceMessage(sample_tool_call_message))
         assert "get_weather" in html

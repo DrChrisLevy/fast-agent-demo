@@ -203,6 +203,61 @@ class TestAgentStreamRoute:
             assert "sunny" in resp.text
 
 
+class TestImageHelpers:
+    """Tests for image extraction and rendering helpers."""
+
+    def test_get_images_from_tool_result_extracts_urls(self, web_app):
+        """get_images_from_tool_result should extract image URLs from content blocks."""
+        msg = {
+            "role": "tool",
+            "content": [
+                {"type": "text", "text": "Plot created"},
+                {"type": "image_url", "image_url": "data:image/png;base64,ABC123"},
+                {"type": "image_url", "image_url": "data:image/png;base64,DEF456"},
+            ],
+        }
+        images = web_app.get_images_from_tool_result(msg)
+        assert len(images) == 2
+        assert "ABC123" in images[0]
+        assert "DEF456" in images[1]
+
+    def test_get_images_from_tool_result_returns_empty_for_string_content(self, web_app):
+        """get_images_from_tool_result should return empty list for string content."""
+        msg = {"role": "tool", "content": "Just a string result"}
+        images = web_app.get_images_from_tool_result(msg)
+        assert images == []
+
+    def test_get_images_from_tool_result_returns_empty_for_no_images(self, web_app):
+        """get_images_from_tool_result should return empty list when no images in blocks."""
+        msg = {
+            "role": "tool",
+            "content": [{"type": "text", "text": "No images here"}],
+        }
+        images = web_app.get_images_from_tool_result(msg)
+        assert images == []
+
+    def test_chat_images_returns_none_for_empty(self, web_app):
+        """ChatImages should return None for empty image list."""
+        result = web_app.ChatImages([])
+        assert result is None
+
+    def test_chat_images_returns_none_for_none(self, web_app):
+        """ChatImages should return None for None input."""
+        result = web_app.ChatImages(None)
+        assert result is None
+
+    def test_chat_images_renders_images(self, web_app):
+        """ChatImages should render img tags for provided URLs."""
+        from fasthtml.common import to_xml
+
+        result = web_app.ChatImages(["data:image/png;base64,IMG1", "data:image/png;base64,IMG2"])
+        html = to_xml(result)
+        assert html.count("<img") == 2
+        assert "IMG1" in html
+        assert "IMG2" in html
+        assert "chat-start" in html
+
+
 @pytest.mark.slow
 class TestAgentStreamIntegration:
     """Integration tests that hit real LLM - skipped by default."""
