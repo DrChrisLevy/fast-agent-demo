@@ -2,13 +2,15 @@
 
 ```
 agents/
-  agent.py           # Agent loop
-  tools.py           # Tool definitions
-  coding_sandbox.py  # Modal sandbox for code execution
-  ui/                # UI components
+  agent.py           # Agentic loop (think → act → observe → repeat)
+  tools.py           # Tool definitions and implementations
+  prompts.py         # System prompt generation
+  coding_sandbox.py  # Modal sandbox wrapper for code execution
+  driver_program.py  # Runs inside Modal sandbox, executes code
+  ui/
     components.py    # Chat, trace, input components
-    markdown.py      # Markdown rendering
-    tool_renderers.py # Custom tool display
+    markdown.py      # Markdown rendering with syntax highlighting
+    tool_renderers.py # Custom tool call display
 tests/               # pytest tests
 main.py              # FastHTML app and routes
 ```
