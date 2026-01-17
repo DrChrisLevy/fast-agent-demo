@@ -252,7 +252,8 @@ class TestImageHelpers:
 
         result = web_app.ChatImages(["data:image/png;base64,IMG1", "data:image/png;base64,IMG2"])
         html = to_xml(result)
-        assert html.count("<img") == 2
+        # Each image has a thumbnail and a modal image (2 images * 2 = 4 img tags)
+        assert html.count("<img") == 4
         assert "IMG1" in html
         assert "IMG2" in html
         assert "chat-start" in html

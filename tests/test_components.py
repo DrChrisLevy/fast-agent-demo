@@ -111,7 +111,8 @@ class TestTraceMessage:
             ],
         }
         html = render(TraceMessage(msg))
-        assert html.count("<img") == 2
+        # Each image has a thumbnail and a modal image (2 images * 2 = 4 img tags)
+        assert html.count("<img") == 4
         assert "IMG1" in html
         assert "IMG2" in html
 
