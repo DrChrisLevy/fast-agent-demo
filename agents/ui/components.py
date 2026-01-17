@@ -126,11 +126,11 @@ def TraceMessage(msg):
                             Dialog(
                                 Div(
                                     Img(src=img_url, cls="max-h-[80vh] max-w-full object-contain"),
-                                    cls="modal-box max-w-5xl p-2 bg-base-300",
+                                    cls="modal-box w-fit max-w-[90vw] p-4 bg-base-300",
                                 ),
                                 Form(Button("", cls="cursor-default"), method="dialog", cls="modal-backdrop bg-black/80"),
                                 id=modal_id,
-                                cls="modal",
+                                cls="modal modal-middle",
                             ),
                         )
                     )
