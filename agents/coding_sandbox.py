@@ -36,7 +36,7 @@ SANDBOX_MEMORY = 4096
 class ModalSandbox:
     IMAGE = (
         modal.Image.debian_slim()
-        .pip_install("pandas", "tabulate", "matplotlib", "seaborn")
+        .pip_install("pandas", "tabulate", "matplotlib", "seaborn", "requests")
         .env(
             {
                 "IO_DATA_DIR": IO_DATA_DIR,

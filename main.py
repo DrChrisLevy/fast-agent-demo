@@ -203,21 +203,34 @@ def get_images_from_tool_result(msg):
 
 
 def ChatImages(images):
-    """Render images in the chat area."""
+    """Render images in the chat area with DaisyUI modal for expansion."""
     if not images:
         return None
-    return Div(
-        Div(
-            *[
+
+    image_elements = []
+    for img_url in images:
+        modal_id = f"chat-img-modal-{hash(img_url) % 100000}"
+        image_elements.append(
+            Div(
                 Img(
                     src=img_url,
-                    cls="max-w-md rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-all",
-                    onclick="this.classList.toggle('max-w-md'); this.classList.toggle('max-w-full');",
-                )
-                for img_url in images
-            ],
-            cls="flex flex-wrap gap-3",
-        ),
+                    cls="max-w-md rounded-lg shadow-md cursor-pointer hover:opacity-90",
+                    onclick=f"document.getElementById('{modal_id}').showModal()",
+                ),
+                Dialog(
+                    Div(
+                        Img(src=img_url, cls="max-h-[80vh] max-w-full object-contain"),
+                        cls="modal-box w-fit max-w-[90vw] p-4 bg-base-300",
+                    ),
+                    Form(Button("", cls="cursor-default"), method="dialog", cls="modal-backdrop bg-black/80"),
+                    id=modal_id,
+                    cls="modal modal-middle",
+                ),
+            )
+        )
+
+    return Div(
+        Div(*image_elements, cls="flex flex-wrap gap-3"),
         cls="chat chat-start",
     )
 
