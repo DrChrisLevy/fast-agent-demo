@@ -4,6 +4,8 @@ Tool definitions and implementations for the agent.
 
 import asyncio
 
+import modal
+
 from agents.coding_sandbox import ModalSandbox
 
 # Lazy-initialized sandbox instance
@@ -33,22 +35,37 @@ def reset_sandbox() -> None:
         _sandbox = None
 
 
+def _terminate_all_sandboxes() -> None:
+    """Terminate all existing sandboxes for the python-sandbox app."""
+    try:
+        app = modal.App.lookup("python-sandbox", create_if_missing=False)
+        if app is None:
+            return
+        for sb in modal.Sandbox.list(app_id=app.app_id):
+            if sb.poll() is None:  # Still running
+                try:
+                    sb.terminate()
+                except Exception:
+                    pass
+    except modal.exception.NotFoundError:
+        pass  # App doesn't exist yet
+    except Exception:
+        pass  # Ignore other errors during cleanup
+
+
 async def init_sandbox() -> None:
-    """Initialize a fresh sandbox (terminate existing one first).
+    """Initialize a fresh sandbox (terminate all existing ones first).
 
     Uses a lock to ensure only one sandbox exists at a time.
+    Terminates all sandboxes from previous app sessions, not just the current one.
     """
     global _sandbox
     async with _sandbox_lock:
-        # Terminate existing sandbox if any
-        if _sandbox is not None:
-            try:
-                _sandbox.terminate()
-            except Exception:
-                pass
-            _sandbox = None
-        # Create new sandbox in executor to not block event loop
         loop = asyncio.get_running_loop()
+        # Terminate ALL existing sandboxes for this app (including from previous sessions)
+        await loop.run_in_executor(None, _terminate_all_sandboxes)
+        _sandbox = None
+        # Create new sandbox in executor to not block event loop
         _sandbox = await loop.run_in_executor(None, lambda: ModalSandbox(init_script=INIT_SCRIPT))
 
 
