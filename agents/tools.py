@@ -74,18 +74,6 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "get_weather",
-            "description": "Get the current weather for a city",
-            "parameters": {
-                "type": "object",
-                "properties": {"city": {"type": "string", "description": "The city name"}},
-                "required": ["city"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "run_code",
             "description": "Run any arbitrary python code",
             "parameters": {
@@ -101,12 +89,6 @@ TOOLS = [
         },
     },
 ]
-
-
-# Tool implementations
-def get_weather(city: str) -> str:
-    # Fake implementation
-    return f"The weather in {city} is 72°F and sunny."
 
 
 def run_code(code: str) -> list:
@@ -139,7 +121,6 @@ def run_code(code: str) -> list:
 
 # Map tool names to functions
 TOOL_FUNCTIONS = {
-    "get_weather": get_weather,
     "run_code": run_code,
 }
 
@@ -163,5 +144,4 @@ Execute Python code in a secure Modal sandbox environment.
 - **Use `print()` for output** — stdout is captured and returned. Always print results you want to see.
 - **Plots are auto-captured** — Just create matplotlib/seaborn figures normally. Don't call `plt.show()` or try to display/encode images manually. All open figures are automatically captured and returned as images after your code runs. For multi-part analyses, prefer multiple `plt.figure()` calls over dense subplots—each figure becomes a separate image.
 """,
-    "get_weather": "Get current weather for a city.",
 }

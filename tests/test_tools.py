@@ -7,7 +7,6 @@ from agents.tools import (
     TOOL_FUNCTIONS,
     TOOLS,
     get_sandbox,
-    get_weather,
     reset_sandbox,
     run_code,
 )
@@ -17,32 +16,13 @@ class TestToolDefinitions:
     """Tests for tool definitions."""
 
     def test_tools_list_contains_expected_tools(self):
-        """TOOLS list should contain get_weather and run_code."""
+        """TOOLS list should contain run_code."""
         tool_names = [t["function"]["name"] for t in TOOLS]
-        assert "get_weather" in tool_names
         assert "run_code" in tool_names
 
     def test_tool_functions_mapping(self):
         """TOOL_FUNCTIONS should map names to implementations."""
-        assert TOOL_FUNCTIONS["get_weather"] is get_weather
         assert TOOL_FUNCTIONS["run_code"] is run_code
-
-
-class TestGetWeather:
-    """Tests for get_weather function."""
-
-    def test_get_weather_returns_weather_string(self):
-        """get_weather should return formatted weather string."""
-        result = get_weather("London")
-        assert "London" in result
-        assert "72°F" in result
-        assert "sunny" in result
-
-    def test_get_weather_with_different_cities(self):
-        """get_weather should work with any city name."""
-        for city in ["New York", "Tokyo", "Paris"]:
-            result = get_weather(city)
-            assert city in result
 
 
 class TestSandboxManagement:

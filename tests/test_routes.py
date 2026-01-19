@@ -184,23 +184,23 @@ class TestAgentStreamRoute:
 
     def test_agent_stream_handles_tool_calls(self, web_app, client):
         """Test SSE with tool calls (mocked)."""
-        web_app.MESSAGES.append({"role": "user", "content": "What's the weather?"})
+        web_app.MESSAGES.append({"role": "user", "content": "Run some code"})
 
         # First call returns tool call, second returns final response
         mock_tool_call = MagicMock()
         mock_tool_call.id = "call_123"
-        mock_tool_call.function.name = "get_weather"
-        mock_tool_call.function.arguments = '{"city": "London"}'
+        mock_tool_call.function.name = "run_code"
+        mock_tool_call.function.arguments = '{"code": "print(42)"}'
 
         with patch("agents.agent.litellm.completion") as mock_completion:
             mock_completion.side_effect = [
                 _mock_llm_response(content=None, tool_calls=[mock_tool_call]),
-                _mock_llm_response("The weather in London is sunny!"),
+                _mock_llm_response("The result is 42!"),
             ]
 
             resp = client.get("/agent-stream")
             assert resp.status_code == 200
-            assert "sunny" in resp.text
+            assert "42" in resp.text
 
 
 class TestImageHelpers:

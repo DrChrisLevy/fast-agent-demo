@@ -22,8 +22,8 @@ def sample_tool_call_message():
             {
                 "id": "call_123",
                 "function": {
-                    "name": "get_weather",
-                    "arguments": '{"city": "London"}',
+                    "name": "run_code",
+                    "arguments": '{"code": "print(42)"}',
                 },
             }
         ],
@@ -36,5 +36,5 @@ def sample_tool_result_message():
     return {
         "role": "tool",
         "tool_call_id": "call_123",
-        "content": "The weather in London is 72°F and sunny.",
+        "content": "stdout:\n42",
     }

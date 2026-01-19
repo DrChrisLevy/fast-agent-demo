@@ -17,28 +17,28 @@ class TestRenderToolCall:
     """Tests for the render_tool_call function."""
 
     def test_default_rendering_shows_tool_name(self):
-        html = render(render_tool_call("get_weather", '{"city": "London"}', "call_123"))
-        assert "get_weather" in html
+        html = render(render_tool_call("some_tool", '{"param": "value"}', "call_123"))
+        assert "some_tool" in html
 
     def test_default_rendering_shows_args(self):
-        args = '{"city": "London"}'
-        html = render(render_tool_call("get_weather", args, "call_123"))
-        assert "London" in html
+        args = '{"param": "value"}'
+        html = render(render_tool_call("some_tool", args, "call_123"))
+        assert "value" in html
 
     def test_default_rendering_shows_id(self):
-        html = render(render_tool_call("get_weather", "{}", "call_123"))
+        html = render(render_tool_call("some_tool", "{}", "call_123"))
         assert "call_123" in html
 
     def test_handles_dict_args(self):
-        args = {"city": "London"}
-        html = render(render_tool_call("get_weather", args, "call_123"))
-        assert "London" in html
+        args = {"param": "value"}
+        html = render(render_tool_call("some_tool", args, "call_123"))
+        assert "value" in html
 
     def test_handles_invalid_json_args(self):
         args = "not valid json"
-        html = render(render_tool_call("get_weather", args, "call_123"))
+        html = render(render_tool_call("some_tool", args, "call_123"))
         # Should not raise, just render what it can
-        assert "get_weather" in html
+        assert "some_tool" in html
 
     def test_uses_custom_renderer_for_run_code(self):
         args = '{"code": "print(42)"}'

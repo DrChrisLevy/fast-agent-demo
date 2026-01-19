@@ -118,7 +118,7 @@ class TestTraceMessage:
 
     def test_assistant_with_tool_calls(self, sample_tool_call_message):
         html = render(TraceMessage(sample_tool_call_message))
-        assert "get_weather" in html
+        assert "run_code" in html
         assert "call_123" in html
 
     def test_unknown_role_uses_ghost_badge(self):
