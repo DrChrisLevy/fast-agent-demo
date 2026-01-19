@@ -49,3 +49,10 @@ agents/
 tests/               # pytest tests
 main.py              # FastHTML app and routes
 ```
+
+
+## Export requirements.txt
+
+```bash
+uv export --no-hashes --no-dev -o requirements.txt
+```
