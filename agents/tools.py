@@ -3,36 +3,61 @@ Tool definitions and implementations for the agent.
 """
 
 import asyncio
+import contextvars
+import threading
 
 import modal
+from cachetools import TTLCache
 
 from agents.coding_sandbox import ModalSandbox
 
-# Lazy-initialized sandbox instance
-_sandbox: ModalSandbox | None = None
-_sandbox_lock = asyncio.Lock()
+# TTL caches for per-user isolation (30 min TTL matches Modal's idle timeout)
+# user_id -> ModalSandbox
+user_sandboxes: TTLCache[str, ModalSandbox] = TTLCache(maxsize=1000, ttl=1800)
+# user_id -> list of messages
+user_messages: TTLCache[str, list] = TTLCache(maxsize=1000, ttl=1800)
+# Lock for thread-safe sandbox operations
+_sandbox_lock = threading.Lock()
+
+# Context variable to pass user_id into tool execution
+current_user_id: contextvars.ContextVar[str] = contextvars.ContextVar("current_user_id")
 
 # Init script to download data/files or define functions etc..
 INIT_SCRIPT = """"""
 
 
-def get_sandbox() -> ModalSandbox:
-    """Get or create the shared sandbox instance."""
-    global _sandbox
-    if _sandbox is None:
-        _sandbox = ModalSandbox(init_script=INIT_SCRIPT)
-    return _sandbox
+def get_sandbox(user_id: str | None = None) -> ModalSandbox:
+    """Get or create the sandbox for a user."""
+    if user_id is None:
+        user_id = current_user_id.get()
+    with _sandbox_lock:
+        if user_id not in user_sandboxes:
+            user_sandboxes[user_id] = ModalSandbox(init_script=INIT_SCRIPT)
+        return user_sandboxes[user_id]
 
 
-def reset_sandbox() -> None:
-    """Terminate and clear the sandbox (sync, no lock)."""
-    global _sandbox
-    if _sandbox is not None:
-        try:
-            _sandbox.terminate()
-        except Exception:
-            pass
-        _sandbox = None
+def reset_sandbox(user_id: str) -> None:
+    """Terminate and clear the sandbox for a specific user (sync, no lock)."""
+    with _sandbox_lock:
+        if user_id in user_sandboxes:
+            try:
+                user_sandboxes[user_id].terminate()
+            except Exception:
+                pass
+            del user_sandboxes[user_id]
+
+
+def get_messages(user_id: str) -> list:
+    """Get or create the message list for a user."""
+    if user_id not in user_messages:
+        user_messages[user_id] = []
+    return user_messages[user_id]
+
+
+def clear_messages(user_id: str) -> None:
+    """Clear the message list for a user."""
+    if user_id in user_messages:
+        del user_messages[user_id]
 
 
 def _terminate_all_sandboxes() -> None:
@@ -53,20 +78,23 @@ def _terminate_all_sandboxes() -> None:
         pass  # Ignore other errors during cleanup
 
 
-async def init_sandbox() -> None:
-    """Initialize a fresh sandbox (terminate all existing ones first).
+async def init_sandbox(user_id: str) -> None:
+    """Initialize a fresh sandbox for a user (terminate their existing one first)."""
+    loop = asyncio.get_running_loop()
 
-    Uses a lock to ensure only one sandbox exists at a time.
-    Terminates all sandboxes from previous app sessions, not just the current one.
-    """
-    global _sandbox
-    async with _sandbox_lock:
-        loop = asyncio.get_running_loop()
-        # Terminate ALL existing sandboxes for this app (including from previous sessions)
-        await loop.run_in_executor(None, _terminate_all_sandboxes)
-        _sandbox = None
-        # Create new sandbox in executor to not block event loop
-        _sandbox = await loop.run_in_executor(None, lambda: ModalSandbox(init_script=INIT_SCRIPT))
+    def _init_user_sandbox():
+        with _sandbox_lock:
+            # Terminate user's existing sandbox if any
+            if user_id in user_sandboxes:
+                try:
+                    user_sandboxes[user_id].terminate()
+                except Exception:
+                    pass
+                del user_sandboxes[user_id]
+            # Create new sandbox for user
+            user_sandboxes[user_id] = ModalSandbox(init_script=INIT_SCRIPT)
+
+    await loop.run_in_executor(None, _init_user_sandbox)
 
 
 # Define tools the agent can use
@@ -92,9 +120,13 @@ TOOLS = [
 
 
 def run_code(code: str) -> list:
-    """Run Python code in the Modal sandbox. Returns content blocks with text and optional images."""
+    """Run Python code in the Modal sandbox. Returns content blocks with text and optional images.
+
+    Uses current_user_id context variable to determine which user's sandbox to use.
+    """
     try:
-        sandbox = get_sandbox()
+        user_id = current_user_id.get()
+        sandbox = get_sandbox(user_id)
         result = sandbox.run_code(code)
     except Exception as e:
         result = {"stdout": "", "stderr": str(e), "images": []}

@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from starlette.testclient import TestClient
 
+import agents.tools as tools_module
+
 
 @pytest.fixture
 def mock_init_sandbox():
@@ -29,6 +31,9 @@ def web_app(monkeypatch, mock_init_sandbox):
 @pytest.fixture
 def client(web_app):
     """Create a test client."""
+    # Clear all user data before each test
+    tools_module.user_sandboxes.clear()
+    tools_module.user_messages.clear()
     return TestClient(web_app.app)
 
 
@@ -60,13 +65,20 @@ class TestIndexRoute:
         assert "Clear" in resp.text
 
     def test_index_clears_messages_on_load(self, web_app, client):
-        # Add a message first
-        web_app.MESSAGES.append({"role": "user", "content": "test"})
-        assert len(web_app.MESSAGES) == 1
+        # First request to establish session and get user_id
+        client.get("/")
+        # Get the user_id from the cache (there's only one user in tests)
+        user_id = list(tools_module.user_messages.keys())[0]
+        messages = tools_module.get_messages(user_id)
+
+        # Add a message
+        messages.append({"role": "user", "content": "test"})
+        assert len(messages) == 1
 
         # Loading index should clear messages
         client.get("/")
-        assert len(web_app.MESSAGES) == 0
+        messages = tools_module.get_messages(user_id)
+        assert len(messages) == 0
 
     def test_index_initializes_sandbox(self, web_app, client):
         web_app._mock_init_sandbox.reset_mock()
@@ -82,9 +94,15 @@ class TestClearRoute:
         assert resp.status_code == 200
 
     def test_clear_empties_messages(self, web_app, client):
-        web_app.MESSAGES.append({"role": "user", "content": "test"})
+        # First request to establish session
+        client.get("/")
+        user_id = list(tools_module.user_messages.keys())[0]
+        messages = tools_module.get_messages(user_id)
+
+        messages.append({"role": "user", "content": "test"})
         client.post("/clear")
-        assert len(web_app.MESSAGES) == 0
+        messages = tools_module.get_messages(user_id)
+        assert len(messages) == 0
 
     def test_clear_initializes_sandbox(self, web_app, client):
         web_app._mock_init_sandbox.reset_mock()
@@ -110,13 +128,16 @@ class TestChatRoute:
         assert resp.text == ""
 
     def test_valid_message_adds_to_history(self, web_app, client):
-        client.get("/")  # Clear messages first
+        client.get("/")  # Clear messages first and establish session
+        user_id = list(tools_module.user_messages.keys())[0]
+
         client.post("/chat", data={"message": "Hello agent"})
+        messages = tools_module.get_messages(user_id)
         # Should have system prompt + user message
-        assert len(web_app.MESSAGES) == 2
-        assert web_app.MESSAGES[0]["role"] == "system"
-        assert web_app.MESSAGES[1]["role"] == "user"
-        assert web_app.MESSAGES[1]["content"] == "Hello agent"
+        assert len(messages) == 2
+        assert messages[0]["role"] == "system"
+        assert messages[1]["role"] == "user"
+        assert messages[1]["content"] == "Hello agent"
 
     def test_valid_message_returns_chat_bubble(self, client):
         client.get("/")  # Clear first
@@ -163,7 +184,11 @@ class TestAgentStreamRoute:
 
     def test_agent_stream_returns_event_stream(self, web_app, client):
         """Test SSE endpoint with mocked LLM."""
-        web_app.MESSAGES.append({"role": "user", "content": "Hello"})
+        # Establish session first
+        client.get("/")
+        user_id = list(tools_module.user_messages.keys())[0]
+        messages = tools_module.get_messages(user_id)
+        messages.append({"role": "user", "content": "Hello"})
 
         with patch("agents.agent.litellm.completion") as mock_completion:
             mock_completion.return_value = _mock_llm_response("Hello! How can I help?")
@@ -174,7 +199,11 @@ class TestAgentStreamRoute:
 
     def test_agent_stream_includes_response_content(self, web_app, client):
         """Test that SSE stream includes the agent's response."""
-        web_app.MESSAGES.append({"role": "user", "content": "Hi"})
+        # Establish session first
+        client.get("/")
+        user_id = list(tools_module.user_messages.keys())[0]
+        messages = tools_module.get_messages(user_id)
+        messages.append({"role": "user", "content": "Hi"})
 
         with patch("agents.agent.litellm.completion") as mock_completion:
             mock_completion.return_value = _mock_llm_response("Mocked agent response")
@@ -184,7 +213,11 @@ class TestAgentStreamRoute:
 
     def test_agent_stream_handles_tool_calls(self, web_app, client):
         """Test SSE with tool calls (mocked)."""
-        web_app.MESSAGES.append({"role": "user", "content": "Run some code"})
+        # Establish session first
+        client.get("/")
+        user_id = list(tools_module.user_messages.keys())[0]
+        messages = tools_module.get_messages(user_id)
+        messages.append({"role": "user", "content": "Run some code"})
 
         # First call returns tool call, second returns final response
         mock_tool_call = MagicMock()
@@ -265,7 +298,11 @@ class TestAgentStreamIntegration:
 
     def test_real_agent_response(self, web_app, client):
         """Test the full agent flow with real LLM."""
-        web_app.MESSAGES.append({"role": "user", "content": "What is 2+2? Reply with just the number."})
+        # Establish session first
+        client.get("/")
+        user_id = list(tools_module.user_messages.keys())[0]
+        messages = tools_module.get_messages(user_id)
+        messages.append({"role": "user", "content": "What is 2+2? Reply with just the number."})
 
         resp = client.get("/agent-stream")
         assert resp.status_code == 200

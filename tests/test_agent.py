@@ -2,8 +2,10 @@
 
 from unittest.mock import MagicMock, patch
 
-
 from agents.agent import run_agent
+
+# Test user ID for all agent tests
+TEST_USER_ID = "test-user-123"
 
 
 def _mock_llm_response(content="Mock response", tool_calls=None, total_tokens=100):
@@ -54,7 +56,7 @@ class TestRunAgentYieldFormat:
             mock_completion.return_value = _mock_llm_response("Hello there!")
 
             messages = [{"role": "user", "content": "Hi"}]
-            events = _filter_message_events(list(run_agent(messages)))
+            events = _filter_message_events(list(run_agent(messages, TEST_USER_ID)))
 
             assert len(events) == 1
             assert events[0]["role"] == "assistant"
@@ -73,7 +75,7 @@ class TestRunAgentYieldFormat:
                 ]
 
                 messages = [{"role": "user", "content": "Run some code"}]
-                events = _filter_message_events(list(run_agent(messages)))
+                events = _filter_message_events(list(run_agent(messages, TEST_USER_ID)))
 
                 # Should yield: assistant with tool_calls, tool result, final assistant
                 assert len(events) == 3
@@ -106,7 +108,7 @@ class TestRunAgentYieldFormat:
                 ]
 
                 messages = [{"role": "user", "content": "Run two things"}]
-                events = _filter_message_events(list(run_agent(messages)))
+                events = _filter_message_events(list(run_agent(messages, TEST_USER_ID)))
 
                 # Should yield: assistant with tool_calls, tool result 1, tool result 2, final
                 assert len(events) == 4
@@ -131,7 +133,7 @@ class TestRunAgentYieldFormat:
             mock_completion.return_value = _mock_llm_response("Hello!")
 
             messages = [{"role": "user", "content": "Hi"}]
-            events = _filter_message_events(list(run_agent(messages)))
+            events = _filter_message_events(list(run_agent(messages, TEST_USER_ID)))
 
             # Messages should have: system, user, assistant
             assert len(messages) == 3
@@ -153,7 +155,7 @@ class TestRunAgentMessageHistory:
             mock_completion.return_value = _mock_llm_response("Hi")
 
             messages = [{"role": "user", "content": "Hello"}]
-            list(run_agent(messages))
+            list(run_agent(messages, TEST_USER_ID))
 
             assert messages[0]["role"] == "system"
 
@@ -166,7 +168,7 @@ class TestRunAgentMessageHistory:
                 {"role": "system", "content": "Custom system prompt"},
                 {"role": "user", "content": "Hello"},
             ]
-            list(run_agent(messages))
+            list(run_agent(messages, TEST_USER_ID))
 
             assert messages[0]["role"] == "system"
             assert messages[0]["content"] == "Custom system prompt"
@@ -182,7 +184,7 @@ class TestRunAgentUsageTracking:
             mock_completion.return_value = _mock_llm_response("Hi", total_tokens=150)
 
             messages = [{"role": "user", "content": "Hello"}]
-            events = list(run_agent(messages))
+            events = list(run_agent(messages, TEST_USER_ID))
             usage_events = _filter_usage_events(events)
 
             assert len(usage_events) == 1
@@ -201,7 +203,7 @@ class TestRunAgentUsageTracking:
                 ]
 
                 messages = [{"role": "user", "content": "Run code"}]
-                events = list(run_agent(messages))
+                events = list(run_agent(messages, TEST_USER_ID))
                 usage_events = _filter_usage_events(events)
 
                 # Should have 2 usage events (one per LLM call)
@@ -219,7 +221,7 @@ class TestRunAgentUsageTracking:
                 ]
 
                 messages = [{"role": "user", "content": "Run code"}]
-                events = list(run_agent(messages))
+                events = list(run_agent(messages, TEST_USER_ID))
                 usage_events = _filter_usage_events(events)
 
                 # First usage: 100 tokens
@@ -241,7 +243,7 @@ class TestRunAgentUsageTracking:
                 ]
 
                 messages = [{"role": "user", "content": "Run code"}]
-                events = list(run_agent(messages))
+                events = list(run_agent(messages, TEST_USER_ID))
                 usage_events = _filter_usage_events(events)
 
                 # Should have 3 usage events
@@ -258,7 +260,7 @@ class TestRunAgentUsageTracking:
             mock_completion.return_value = mock_response
 
             messages = [{"role": "user", "content": "Hello"}]
-            events = list(run_agent(messages))
+            events = list(run_agent(messages, TEST_USER_ID))
             usage_events = _filter_usage_events(events)
 
             # Should still yield a usage event with 0 total

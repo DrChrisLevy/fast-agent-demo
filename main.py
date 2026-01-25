@@ -6,11 +6,12 @@ A hackable interface for working with agents - see chat, tool calls, and traces.
 """
 
 import asyncio
+import uuid
 
 from dotenv import load_dotenv
 from fasthtml.common import *
 from agents.agent import run_agent
-from agents.tools import init_sandbox
+from agents.tools import init_sandbox, get_messages, clear_messages, reset_sandbox
 from agents.ui import (
     ChatMessage,
     ChatInput,
@@ -23,15 +24,15 @@ from agents.prompts import SYSTEM_PROMPT
 
 load_dotenv(dotenv_path="plash.env")
 
-# Global in-memory message history (reset on refresh/clear)
-MESSAGES = []
-
 
 # ============ App Setup ============
 
 
-def before(req, sess):  # noqa: ARG001
-    pass  # Hook for request preprocessing
+def before(req, sess):
+    """Assign or retrieve user_id from session, attach to request state."""
+    if "user_id" not in sess:
+        sess["user_id"] = str(uuid.uuid4())
+    req.state.user_id = sess["user_id"]
 
 
 beforeware = Beforeware(before, skip=[])
@@ -62,12 +63,13 @@ app, rt = fast_app(
 
 
 @rt("/", methods=["GET"])
-async def index():
-    global MESSAGES
+async def index(req):
+    user_id = req.state.user_id
     # Clear messages on page load (refresh = clear)
-    MESSAGES = []
+    clear_messages(user_id)
+    messages = get_messages(user_id)
     # Initialize sandbox in background (terminate old, create new)
-    asyncio.create_task(init_sandbox())
+    asyncio.create_task(init_sandbox(user_id))
 
     return Title("FastAgent"), Div(
         # Header - DaisyUI navbar
@@ -114,7 +116,7 @@ async def index():
                     cls="p-3 border-b border-base-300 bg-base-100 sticky top-0",
                 ),
                 Div(
-                    TraceView(MESSAGES),
+                    TraceView(messages),
                     id="trace-container",
                     cls="overflow-y-auto flex-1 min-h-0",
                 ),
@@ -127,11 +129,12 @@ async def index():
 
 
 @rt("/clear", methods=["POST"])
-async def clear_chat():
-    global MESSAGES
-    MESSAGES = []
+async def clear_chat(req):
+    user_id = req.state.user_id
+    clear_messages(user_id)
+    reset_sandbox(user_id)
     # Initialize sandbox in background (terminate old, create new)
-    asyncio.create_task(init_sandbox())
+    asyncio.create_task(init_sandbox(user_id))
     return (
         "",  # Clear chat container
         Div(
@@ -145,17 +148,18 @@ async def clear_chat():
 
 
 @rt("/chat", methods=["POST"])
-def send_message(message: str):
-    global MESSAGES
+def send_message(req, message: str):
+    user_id = req.state.user_id
+    messages = get_messages(user_id)
     if not message.strip():
         return ""
 
     # Ensure system prompt exists (so trace shows it before agent runs)
-    if not MESSAGES or MESSAGES[0].get("role") != "system":
-        MESSAGES.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+    if not messages or messages[0].get("role") != "system":
+        messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
 
     # Add user message to history
-    MESSAGES.append({"role": "user", "content": message})
+    messages.append({"role": "user", "content": message})
 
     # Return user message + SSE container + trace update (shows system + user)
     return (
@@ -172,7 +176,7 @@ def send_message(message: str):
             id="response-area",
             hx_swap_oob="true",
         ),
-        TraceUpdate(MESSAGES),
+        TraceUpdate(messages),
     )
 
 
@@ -255,11 +259,13 @@ def TraceAppend(msg):
 
 
 @rt("/agent-stream", methods=["GET"])
-async def agent_stream():
+async def agent_stream(req):
     """SSE endpoint that streams agent messages."""
+    user_id = req.state.user_id
+    messages = get_messages(user_id)
 
     async def event_stream():
-        for msg in run_agent(MESSAGES):
+        for msg in run_agent(messages, user_id):
             if is_usage_update(msg):
                 # Usage update: update token count
                 yield sse_message(TokenCountUpdate(msg["total"]), event="AgentEvent")

@@ -7,7 +7,7 @@ No abstractions. No bells and whistles. Just the core loop.
 
 import json
 from dotenv import load_dotenv
-from agents.tools import TOOLS, TOOL_FUNCTIONS
+from agents.tools import TOOLS, TOOL_FUNCTIONS, current_user_id
 from agents.prompts import SYSTEM_PROMPT
 import litellm
 import warnings
@@ -16,9 +16,13 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 load_dotenv()
 
 
-def run_agent(messages):
+def run_agent(messages, user_id: str):
     """
     The agent loop as a generator - yields messages as they're added.
+
+    Args:
+        messages: List of chat messages
+        user_id: The user ID for sandbox isolation
 
     Yields messages in standard Chat Completions format:
       - {"role": "assistant", "tool_calls": [...], ...}  # Assistant requesting tool calls
@@ -28,6 +32,8 @@ def run_agent(messages):
     Also yields usage updates:
       - {"type": "usage", "total": ...}  # Cumulative token count
     """
+    # Set the user context for tool execution
+    current_user_id.set(user_id)
     if not messages or messages[0].get("role") != "system":
         messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
 

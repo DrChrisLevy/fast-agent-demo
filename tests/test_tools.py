@@ -6,10 +6,14 @@ import agents.tools as tools_module
 from agents.tools import (
     TOOL_FUNCTIONS,
     TOOLS,
+    current_user_id,
     get_sandbox,
     reset_sandbox,
     run_code,
 )
+
+# Test user ID
+TEST_USER_ID = "test-user-123"
 
 
 class TestToolDefinitions:
@@ -30,11 +34,11 @@ class TestSandboxManagement:
 
     def setup_method(self):
         """Reset sandbox state before each test."""
-        tools_module._sandbox = None
+        tools_module.user_sandboxes.clear()
 
     def teardown_method(self):
         """Clean up sandbox state after each test."""
-        tools_module._sandbox = None
+        tools_module.user_sandboxes.clear()
 
     @patch("agents.tools.ModalSandbox")
     def test_get_sandbox_creates_new_sandbox(self, mock_sandbox_class):
@@ -42,7 +46,7 @@ class TestSandboxManagement:
         mock_instance = MagicMock()
         mock_sandbox_class.return_value = mock_instance
 
-        result = get_sandbox()
+        result = get_sandbox(TEST_USER_ID)
 
         mock_sandbox_class.assert_called_once()
         assert result is mock_instance
@@ -53,8 +57,8 @@ class TestSandboxManagement:
         mock_instance = MagicMock()
         mock_sandbox_class.return_value = mock_instance
 
-        first_call = get_sandbox()
-        second_call = get_sandbox()
+        first_call = get_sandbox(TEST_USER_ID)
+        second_call = get_sandbox(TEST_USER_ID)
 
         # Should only create once
         mock_sandbox_class.assert_called_once()
@@ -67,20 +71,20 @@ class TestSandboxManagement:
         mock_sandbox_class.return_value = mock_instance
 
         # Create a sandbox
-        get_sandbox()
-        assert tools_module._sandbox is not None
+        get_sandbox(TEST_USER_ID)
+        assert TEST_USER_ID in tools_module.user_sandboxes
 
         # Reset it
-        reset_sandbox()
+        reset_sandbox(TEST_USER_ID)
 
         mock_instance.terminate.assert_called_once()
-        assert tools_module._sandbox is None
+        assert TEST_USER_ID not in tools_module.user_sandboxes
 
     def test_reset_sandbox_when_none_exists(self):
         """reset_sandbox should handle case when no sandbox exists."""
-        assert tools_module._sandbox is None
-        reset_sandbox()  # Should not raise
-        assert tools_module._sandbox is None
+        assert TEST_USER_ID not in tools_module.user_sandboxes
+        reset_sandbox(TEST_USER_ID)  # Should not raise
+        assert TEST_USER_ID not in tools_module.user_sandboxes
 
     @patch("agents.tools.ModalSandbox")
     def test_reset_sandbox_ignores_termination_errors(self, mock_sandbox_class):
@@ -89,22 +93,23 @@ class TestSandboxManagement:
         mock_instance.terminate.side_effect = Exception("Termination failed")
         mock_sandbox_class.return_value = mock_instance
 
-        get_sandbox()
-        reset_sandbox()  # Should not raise despite termination error
+        get_sandbox(TEST_USER_ID)
+        reset_sandbox(TEST_USER_ID)  # Should not raise despite termination error
 
-        assert tools_module._sandbox is None
+        assert TEST_USER_ID not in tools_module.user_sandboxes
 
 
 class TestRunCode:
     """Tests for run_code function."""
 
     def setup_method(self):
-        """Reset sandbox state before each test."""
-        tools_module._sandbox = None
+        """Reset sandbox state and set user context before each test."""
+        tools_module.user_sandboxes.clear()
+        current_user_id.set(TEST_USER_ID)
 
     def teardown_method(self):
         """Clean up sandbox state after each test."""
-        tools_module._sandbox = None
+        tools_module.user_sandboxes.clear()
 
     @patch("agents.tools.ModalSandbox")
     def test_run_code_returns_content_blocks(self, mock_sandbox_class):

@@ -36,6 +36,10 @@ This app uses https://github.com/AnswerDotAI/fastlite for the database.
 This app uses https://docs.litellm.ai/docs/ for the LLM API.
 
 
+## Dependencies
+
+Use `uv add <package>` to add dependencies during development. This updates `pyproject.toml` automatically. The `requirements.txt` file is for deployment and managed separately by the user.
+
 ## Linting
 
 Run `./dev lint` after finishing code changes to lint the code.
