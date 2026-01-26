@@ -8,7 +8,6 @@ No abstractions. No bells and whistles. Just the core loop.
 import json
 from dotenv import load_dotenv
 from agents.tools import TOOLS, TOOL_FUNCTIONS, current_user_id
-from agents.prompts import SYSTEM_PROMPT
 import litellm
 import warnings
 
@@ -34,8 +33,7 @@ def run_agent(messages, user_id: str):
     """
     # Set the user context for tool execution
     current_user_id.set(user_id)
-    if not messages or messages[0].get("role") != "system":
-        messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+    # Note: System prompt is added by send_message() in main.py before calling run_agent
 
     # Track cumulative token usage across the agentic loop
     total_tokens = 0

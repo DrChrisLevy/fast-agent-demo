@@ -132,7 +132,11 @@ class TestRunAgentYieldFormat:
         with patch("agents.agent.litellm.completion") as mock_completion:
             mock_completion.return_value = _mock_llm_response("Hello!")
 
-            messages = [{"role": "user", "content": "Hi"}]
+            # System prompt is added by main.py before calling run_agent
+            messages = [
+                {"role": "system", "content": "System prompt"},
+                {"role": "user", "content": "Hi"},
+            ]
             events = _filter_message_events(list(run_agent(messages, TEST_USER_ID)))
 
             # Messages should have: system, user, assistant
@@ -149,15 +153,21 @@ class TestRunAgentYieldFormat:
 class TestRunAgentMessageHistory:
     """Tests for message history management."""
 
-    def test_adds_system_prompt_if_missing(self):
-        """Should prepend system prompt if not present."""
+    def test_works_with_system_prompt_from_caller(self):
+        """run_agent expects system prompt to already be present (added by main.py)."""
         with patch("agents.agent.litellm.completion") as mock_completion:
             mock_completion.return_value = _mock_llm_response("Hi")
 
-            messages = [{"role": "user", "content": "Hello"}]
+            # System prompt is added by send_message() in main.py before calling run_agent
+            messages = [
+                {"role": "system", "content": "Test system prompt"},
+                {"role": "user", "content": "Hello"},
+            ]
             list(run_agent(messages, TEST_USER_ID))
 
+            # System prompt should remain unchanged
             assert messages[0]["role"] == "system"
+            assert messages[0]["content"] == "Test system prompt"
 
     def test_preserves_existing_system_prompt(self):
         """Should not add system prompt if already present."""

@@ -182,29 +182,30 @@ def TraceView(messages):
 
 def ChatInput():
     """The chat input form with multiline support. Cmd+Enter to send."""
-    return Div(
+    # Single form handles both keyboard and button submission to prevent double-triggers.
+    # hx-disabled-elt prevents re-submission while request is in flight.
+    return Form(
         Textarea(
             name="message",
             placeholder="Ask something... (Cmd+Enter to send)",
             rows=3,
             cls="textarea textarea-bordered flex-1 resize-none text-base leading-relaxed",
+            id="message-input",
             autofocus=True,
-            hx_post="/chat",
-            hx_target="#chat-target",
-            hx_swap="none",
-            hx_trigger="keydown[metaKey&&key=='Enter'], keydown[ctrlKey&&key=='Enter']",
-            **{"hx-on::after-request": "this.value = ''"},
         ),
         Button(
             "Send",
+            type="submit",
             cls="btn btn-primary self-end",
-            hx_post="/chat",
-            hx_target="#chat-target",
-            hx_swap="none",
-            hx_include="[name='message']",
-            **{"hx-on::after-request": "document.querySelector('[name=message]').value = ''"},
+            id="send-btn",
         ),
         Div(id="chat-target"),
+        hx_post="/chat",
+        hx_target="#chat-target",
+        hx_swap="none",
+        hx_trigger="submit, keydown[metaKey&&key=='Enter'] from:#message-input, keydown[ctrlKey&&key=='Enter'] from:#message-input",
+        hx_disabled_elt="#send-btn, #message-input",
+        **{"hx-on::after-request": "document.getElementById('message-input').value = ''"},
         cls="flex gap-3 items-end w-full",
     )
 
