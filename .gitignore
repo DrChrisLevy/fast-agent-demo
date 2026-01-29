@@ -16,4 +16,4 @@ plash.env
 
 .coverage
 
-.sesskey
+.sesskey.plash
