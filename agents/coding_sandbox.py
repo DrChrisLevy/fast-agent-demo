@@ -36,7 +36,22 @@ SANDBOX_MEMORY = 4096
 class ModalSandbox:
     IMAGE = (
         modal.Image.debian_slim()
-        .pip_install("pandas", "tabulate", "matplotlib", "seaborn", "requests")
+        .pip_install(
+            "pandas",
+            "numpy",
+            "scipy",
+            "scikit-learn",  # data science core
+            "matplotlib",
+            "seaborn",
+            "plotly",  # visualization
+            "requests",
+            "beautifulsoup4",
+            "lxml",  # web/scraping
+            "openpyxl",
+            "pyarrow",  # file formats
+            "Pillow",
+            "tabulate",  # utilities
+        )
         .env(
             {
                 "IO_DATA_DIR": IO_DATA_DIR,
