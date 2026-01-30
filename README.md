@@ -9,8 +9,9 @@ Built with [FastHTML](https://fastht.ml/) + [DaisyUI](https://daisyui.com/) + [H
 - **Secure cloud sandboxes** — Python runs in isolated [Modal](https://modal.com) containers, fully sandboxed from the host
 - **Persistent state** — Variables, imports, and definitions carry over between code executions
 - **Vision-enabled tool results** — The agent sees stdout, stderr, *and* any generated images (plots, charts, etc.)
-- **Auto-captured plots** — Matplotlib/seaborn figures are automatically captured and returned as images
-- **Data science ready** — pandas, numpy, scipy, scikit-learn, matplotlib, seaborn, plotly, and more pre-installed; install any package with `pip`
+- **Auto-captured plots** — Matplotlib/seaborn figures are captured as images; Plotly figures are captured as both interactive HTML (for you) and static images (for the agent)
+- **Interactive Plotly charts** — Plotly figures render as fully interactive charts you can zoom, pan, and hover—while the agent still sees them via vision
+- **Data science ready** — pandas, numpy, scipy, scikit-learn, matplotlib, seaborn, plotly, kaleido, and more pre-installed; install any package with `pip`
 - **Per-user isolation** — Each browser session gets its own sandbox, which spins up on page load; refreshing resets to a fresh sandbox and terminates the old one
 - **Multi-provider LLM** — Uses [LiteLLM](https://docs.litellm.ai/) for easy model switching
 
