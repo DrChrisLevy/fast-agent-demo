@@ -239,8 +239,10 @@ class TestAgentStreamRoute:
 class TestImageHelpers:
     """Tests for image extraction and rendering helpers."""
 
-    def test_get_images_from_tool_result_extracts_urls(self, web_app):
+    def test_get_images_from_tool_result_extracts_urls(self):
         """get_images_from_tool_result should extract image URLs from content blocks."""
+        from agents.ui import get_images_from_tool_result
+
         msg = {
             "role": "tool",
             "content": [
@@ -249,47 +251,132 @@ class TestImageHelpers:
                 {"type": "image_url", "image_url": "data:image/png;base64,DEF456"},
             ],
         }
-        images = web_app.get_images_from_tool_result(msg)
+        images = get_images_from_tool_result(msg)
         assert len(images) == 2
         assert "ABC123" in images[0]
         assert "DEF456" in images[1]
 
-    def test_get_images_from_tool_result_returns_empty_for_string_content(self, web_app):
+    def test_get_images_from_tool_result_returns_empty_for_string_content(self):
         """get_images_from_tool_result should return empty list for string content."""
+        from agents.ui import get_images_from_tool_result
+
         msg = {"role": "tool", "content": "Just a string result"}
-        images = web_app.get_images_from_tool_result(msg)
+        images = get_images_from_tool_result(msg)
         assert images == []
 
-    def test_get_images_from_tool_result_returns_empty_for_no_images(self, web_app):
+    def test_get_images_from_tool_result_returns_empty_for_no_images(self):
         """get_images_from_tool_result should return empty list when no images in blocks."""
+        from agents.ui import get_images_from_tool_result
+
         msg = {
             "role": "tool",
             "content": [{"type": "text", "text": "No images here"}],
         }
-        images = web_app.get_images_from_tool_result(msg)
+        images = get_images_from_tool_result(msg)
         assert images == []
 
-    def test_chat_images_returns_none_for_empty(self, web_app):
+    def test_chat_images_returns_none_for_empty(self):
         """ChatImages should return None for empty image list."""
-        result = web_app.ChatImages([])
+        from agents.ui import ChatImages
+
+        result = ChatImages([])
         assert result is None
 
-    def test_chat_images_returns_none_for_none(self, web_app):
+    def test_chat_images_returns_none_for_none(self):
         """ChatImages should return None for None input."""
-        result = web_app.ChatImages(None)
+        from agents.ui import ChatImages
+
+        result = ChatImages(None)
         assert result is None
 
-    def test_chat_images_renders_images(self, web_app):
+    def test_chat_images_renders_images(self):
         """ChatImages should render img tags for provided URLs."""
         from fasthtml.common import to_xml
+        from agents.ui import ChatImages
 
-        result = web_app.ChatImages(["data:image/png;base64,IMG1", "data:image/png;base64,IMG2"])
+        result = ChatImages(["data:image/png;base64,IMG1", "data:image/png;base64,IMG2"])
         html = to_xml(result)
         # Each image has a thumbnail and a modal image (2 images * 2 = 4 img tags)
         assert html.count("<img") == 4
         assert "IMG1" in html
         assert "IMG2" in html
         assert "chat-start" in html
+
+
+class TestPlotlyHelpers:
+    """Tests for Plotly extraction and rendering helpers."""
+
+    def test_get_plotly_htmls_from_tool_result_extracts_html(self):
+        """get_plotly_htmls_from_tool_result should extract HTML from content blocks."""
+        from agents.ui import get_plotly_htmls_from_tool_result
+
+        msg = {
+            "role": "tool",
+            "content": [
+                {"type": "text", "text": "(no output)"},
+                {"type": "plotly_html", "html": "<div>chart1</div>"},
+                {"type": "plotly_html", "html": "<div>chart2</div>"},
+            ],
+        }
+        htmls = get_plotly_htmls_from_tool_result(msg)
+        assert len(htmls) == 2
+        assert "chart1" in htmls[0]
+        assert "chart2" in htmls[1]
+
+    def test_get_plotly_htmls_from_tool_result_returns_empty_for_string_content(self):
+        """get_plotly_htmls_from_tool_result should return empty list for string content."""
+        from agents.ui import get_plotly_htmls_from_tool_result
+
+        msg = {"role": "tool", "content": "Just a string result"}
+        htmls = get_plotly_htmls_from_tool_result(msg)
+        assert htmls == []
+
+    def test_get_plotly_htmls_from_tool_result_returns_empty_for_no_plotly(self):
+        """get_plotly_htmls_from_tool_result should return empty list when no plotly in blocks."""
+        from agents.ui import get_plotly_htmls_from_tool_result
+
+        msg = {
+            "role": "tool",
+            "content": [{"type": "text", "text": "No plotly here"}],
+        }
+        htmls = get_plotly_htmls_from_tool_result(msg)
+        assert htmls == []
+
+    def test_chat_plotly_returns_none_for_empty(self):
+        """ChatPlotly should return None for empty list."""
+        from agents.ui import ChatPlotly
+
+        result = ChatPlotly([])
+        assert result is None
+
+    def test_chat_plotly_returns_none_for_none(self):
+        """ChatPlotly should return None for None input."""
+        from agents.ui import ChatPlotly
+
+        result = ChatPlotly(None)
+        assert result is None
+
+    def test_chat_plotly_renders_iframes(self):
+        """ChatPlotly should render iframes for provided HTML."""
+        from fasthtml.common import to_xml
+        from agents.ui import ChatPlotly
+
+        result = ChatPlotly(["<div>chart1</div>", "<div>chart2</div>"])
+        html = to_xml(result)
+        assert html.count("<iframe") == 2
+        assert "chart1" in html
+        assert "chart2" in html
+
+    def test_chat_plotly_not_in_chat_bubble(self):
+        """ChatPlotly should render full-width, not in chat bubble."""
+        from fasthtml.common import to_xml
+        from agents.ui import ChatPlotly
+
+        result = ChatPlotly(["<div>chart</div>"])
+        html = to_xml(result)
+        # Should NOT have chat-start class (not in chat bubble)
+        assert "chat-start" not in html
+        assert "chat-end" not in html
 
 
 @pytest.mark.slow

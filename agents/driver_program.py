@@ -79,6 +79,17 @@ for line in tail_f(STDIN_FILE):
     except ImportError:
         pass  # matplotlib not available
 
+    # Capture any Plotly figures as interactive HTML
+    plotly_htmls = []
+    try:
+        import plotly.graph_objects as go
+
+        for name, obj in list(globals.items()):
+            if isinstance(obj, go.Figure):
+                plotly_htmls.append(obj.to_html(full_html=False, include_plotlyjs="cdn"))
+    except ImportError:
+        pass  # plotly not available
+
     with open(os.path.join(IO_DATA_DIR, f"{command_id}.txt"), "w") as f:
         f.write(
             json.dumps(
@@ -86,6 +97,7 @@ for line in tail_f(STDIN_FILE):
                     "stdout": stdout_io.getvalue(),
                     "stderr": stderr_io.getvalue(),
                     "images": images,
+                    "plotly_htmls": plotly_htmls,
                 }
             )
         )

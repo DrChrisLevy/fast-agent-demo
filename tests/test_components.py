@@ -116,6 +116,51 @@ class TestTraceMessage:
         assert "IMG1" in html
         assert "IMG2" in html
 
+    def test_tool_message_with_plotly_html(self):
+        """Tool results with plotly_html content blocks should render iframes."""
+        msg = {
+            "role": "tool",
+            "tool_call_id": "call_plotly",
+            "content": [
+                {"type": "text", "text": "(no output)"},
+                {"type": "plotly_html", "html": "<div id='plotly-chart'>chart</div>"},
+            ],
+        }
+        html = render(TraceMessage(msg))
+        assert "TOOL" in html
+        assert "<iframe" in html
+        assert "plotly-chart" in html
+
+    def test_tool_message_with_multiple_plotly_charts(self):
+        """Tool results with multiple plotly charts should render all of them."""
+        msg = {
+            "role": "tool",
+            "tool_call_id": "call_multi_plotly",
+            "content": [
+                {"type": "plotly_html", "html": "<div>chart1</div>"},
+                {"type": "plotly_html", "html": "<div>chart2</div>"},
+            ],
+        }
+        html = render(TraceMessage(msg))
+        assert html.count("<iframe") == 2
+        assert "chart1" in html
+        assert "chart2" in html
+
+    def test_tool_message_with_mixed_images_and_plotly(self):
+        """Tool results with both images and plotly should render both."""
+        msg = {
+            "role": "tool",
+            "tool_call_id": "call_mixed",
+            "content": [
+                {"type": "text", "text": "Mixed output"},
+                {"type": "image_url", "image_url": "data:image/png;base64,IMG1"},
+                {"type": "plotly_html", "html": "<div>interactive</div>"},
+            ],
+        }
+        html = render(TraceMessage(msg))
+        assert "<img" in html
+        assert "<iframe" in html
+
     def test_assistant_with_tool_calls(self, sample_tool_call_message):
         html = render(TraceMessage(sample_tool_call_message))
         assert "run_code" in html

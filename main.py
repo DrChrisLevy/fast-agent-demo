@@ -15,10 +15,18 @@ from agents.tools import init_sandbox, get_messages, clear_messages, reset_sandb
 from agents.ui import (
     ChatMessage,
     ChatInput,
-    TraceMessage,
+    ChatImages,
+    ChatPlotly,
     TraceView,
     TraceUpdate,
+    TraceAppend,
     ThinkingIndicator,
+    TokenCountUpdate,
+    is_usage_update,
+    is_final_response,
+    is_tool_result,
+    get_images_from_tool_result,
+    get_plotly_htmls_from_tool_result,
 )
 from agents.prompts import SYSTEM_PROMPT
 
@@ -180,84 +188,6 @@ def send_message(req, message: str):
     )
 
 
-def is_usage_update(msg):
-    """Check if message is a usage update."""
-    return isinstance(msg, dict) and msg.get("type") == "usage"
-
-
-def is_final_response(msg):
-    """Check if message is the final assistant response (no tool calls)."""
-    role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "role", None)
-    tool_calls = msg.get("tool_calls") if isinstance(msg, dict) else getattr(msg, "tool_calls", None)
-    return role == "assistant" and not tool_calls
-
-
-def is_tool_result(msg):
-    """Check if message is a tool result."""
-    return isinstance(msg, dict) and msg.get("role") == "tool"
-
-
-def get_images_from_tool_result(msg):
-    """Extract image URLs from a tool result message."""
-    content = msg.get("content", "")
-    if not isinstance(content, list):
-        return []
-    return [block.get("image_url") for block in content if block.get("type") == "image_url"]
-
-
-def ChatImages(images):
-    """Render images in the chat area with DaisyUI modal for expansion."""
-    if not images:
-        return None
-
-    image_elements = []
-    for img_url in images:
-        modal_id = f"chat-img-modal-{hash(img_url) % 100000}"
-        image_elements.append(
-            Div(
-                Img(
-                    src=img_url,
-                    cls="max-w-md rounded-lg shadow-md cursor-pointer hover:opacity-90",
-                    onclick=f"document.getElementById('{modal_id}').showModal()",
-                ),
-                Dialog(
-                    Div(
-                        Img(src=img_url, cls="max-h-[80vh] max-w-full object-contain"),
-                        cls="modal-box w-fit max-w-[90vw] p-4 bg-base-300",
-                    ),
-                    Form(Button("", cls="cursor-default"), method="dialog", cls="modal-backdrop bg-neutral/80"),
-                    id=modal_id,
-                    cls="modal modal-middle",
-                ),
-            )
-        )
-
-    return Div(
-        Div(*image_elements, cls="flex flex-wrap gap-3"),
-        cls="chat chat-start",
-    )
-
-
-def TokenCountUpdate(total_tokens):
-    """OOB update for the token count display."""
-    return Span(
-        f"{total_tokens:,} tokens",
-        id="token-count",
-        cls="text-sm opacity-70 mr-4",
-        hx_swap_oob="true",
-    )
-
-
-def TraceAppend(msg):
-    """Append a message to trace with auto-scroll to bottom."""
-    scroll_js = "let c = document.getElementById('trace-container'); c.scrollTop = c.scrollHeight;"
-    return Div(
-        Div(TraceMessage(msg), **{"hx-on::load": scroll_js}),
-        id="trace-container",
-        hx_swap_oob="beforeend",
-    )
-
-
 @rt("/agent-stream", methods=["GET"])
 async def agent_stream(req):
     """SSE endpoint that streams agent messages."""
@@ -289,14 +219,20 @@ async def agent_stream(req):
                 yield sse_message(Div(), event="close")
             else:
                 # Intermediate (tool calls or tool results): append to trace
-                # Also show images in chat if this is a tool result with images
+                # Also show images/charts in chat if this is a tool result with visuals
                 if is_tool_result(msg):
                     images = get_images_from_tool_result(msg)
-                    if images:
+                    plotly_htmls = get_plotly_htmls_from_tool_result(msg)
+                    if images or plotly_htmls:
+                        chat_visuals = []
+                        if images:
+                            chat_visuals.append(ChatImages(images))
+                        if plotly_htmls:
+                            chat_visuals.append(ChatPlotly(plotly_htmls))
                         yield sse_message(
                             Div(
                                 Div(
-                                    ChatImages(images),
+                                    *chat_visuals,
                                     id="chat-container",
                                     hx_swap_oob="beforeend",
                                 ),

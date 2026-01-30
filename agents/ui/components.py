@@ -9,6 +9,42 @@ from agents.ui.markdown import render_md
 from agents.ui.tool_renderers import render_tool_call
 
 
+# ============ Message Type Helpers ============
+
+
+def is_usage_update(msg):
+    """Check if message is a usage update."""
+    return isinstance(msg, dict) and msg.get("type") == "usage"
+
+
+def is_final_response(msg):
+    """Check if message is the final assistant response (no tool calls)."""
+    role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "role", None)
+    tool_calls = msg.get("tool_calls") if isinstance(msg, dict) else getattr(msg, "tool_calls", None)
+    return role == "assistant" and not tool_calls
+
+
+def is_tool_result(msg):
+    """Check if message is a tool result."""
+    return isinstance(msg, dict) and msg.get("role") == "tool"
+
+
+def get_images_from_tool_result(msg):
+    """Extract image URLs from a tool result message."""
+    content = msg.get("content", "")
+    if not isinstance(content, list):
+        return []
+    return [block.get("image_url") for block in content if block.get("type") == "image_url"]
+
+
+def get_plotly_htmls_from_tool_result(msg):
+    """Extract Plotly HTML from a tool result message."""
+    content = msg.get("content", "")
+    if not isinstance(content, list):
+        return []
+    return [block.get("html") for block in content if block.get("type") == "plotly_html"]
+
+
 def ChatMessage(role: str, content: str):
     """Render a chat message bubble."""
     is_user = role == "user"
@@ -104,6 +140,7 @@ def TraceMessage(msg):
         if isinstance(msg_content, list):
             text_parts = []
             image_parts = []
+            plotly_parts = []
             for block in msg_content:
                 if block.get("type") == "text":
                     text_parts.append(
@@ -134,17 +171,29 @@ def TraceMessage(msg):
                             ),
                         )
                     )
+                elif block.get("type") == "plotly_html":
+                    # Render interactive Plotly chart in iframe (scripts execute in iframe)
+                    html = block.get("html", "")
+                    plotly_parts.append(
+                        Iframe(
+                            srcdoc=f"<!DOCTYPE html><html><head><style>body{{margin:0}}</style></head><body>{html}</body></html>",
+                            cls="w-full h-80 border-0 rounded bg-base-100",
+                        )
+                    )
 
-            # Build content with text parts and image grid
+            # Build content with text parts, image grid, and plotly charts
             parts = text_parts
             if image_parts:
-                # Grid: 2 columns for thumbnails
+                # Grid: 2 columns for image thumbnails
                 parts.append(
                     Div(
                         *image_parts,
                         cls="grid grid-cols-2 gap-2 my-2",
                     )
                 )
+            if plotly_parts:
+                # Plotly charts full width (not in grid)
+                parts.extend([Div(p, cls="my-2") for p in plotly_parts])
 
             content = Div(
                 Span(f"tool_call_id: {tool_call_id}", cls="text-xs opacity-50 block mb-1"),
@@ -226,4 +275,76 @@ def TraceUpdate(messages):
         id="trace-container",
         hx_swap_oob="true",
         cls="overflow-y-auto flex-1 min-h-0",
+    )
+
+
+def TraceAppend(msg):
+    """Append a message to trace with auto-scroll to bottom."""
+    scroll_js = "let c = document.getElementById('trace-container'); c.scrollTop = c.scrollHeight;"
+    return Div(
+        Div(TraceMessage(msg), **{"hx-on::load": scroll_js}),
+        id="trace-container",
+        hx_swap_oob="beforeend",
+    )
+
+
+def TokenCountUpdate(total_tokens):
+    """OOB update for the token count display."""
+    return Span(
+        f"{total_tokens:,} tokens",
+        id="token-count",
+        cls="text-sm opacity-70 mr-4",
+        hx_swap_oob="true",
+    )
+
+
+def ChatImages(images):
+    """Render images in the chat area with DaisyUI modal for expansion."""
+    if not images:
+        return None
+
+    image_elements = []
+    for img_url in images:
+        modal_id = f"chat-img-modal-{hash(img_url) % 100000}"
+        image_elements.append(
+            Div(
+                Img(
+                    src=img_url,
+                    cls="max-w-md rounded-lg shadow-md cursor-pointer hover:opacity-90",
+                    onclick=f"document.getElementById('{modal_id}').showModal()",
+                ),
+                Dialog(
+                    Div(
+                        Img(src=img_url, cls="max-h-[80vh] max-w-full object-contain"),
+                        cls="modal-box w-fit max-w-[90vw] p-4 bg-base-300",
+                    ),
+                    Form(Button("", cls="cursor-default"), method="dialog", cls="modal-backdrop bg-neutral/80"),
+                    id=modal_id,
+                    cls="modal modal-middle",
+                ),
+            )
+        )
+
+    return Div(
+        Div(*image_elements, cls="flex flex-wrap gap-3"),
+        cls="chat chat-start",
+    )
+
+
+def ChatPlotly(plotly_htmls):
+    """Render interactive Plotly charts in the chat area (full width, not in chat bubble)."""
+    if not plotly_htmls:
+        return None
+
+    chart_elements = [
+        Iframe(
+            srcdoc=f"<!DOCTYPE html><html><head><style>body{{margin:0}}</style></head><body>{html}</body></html>",
+            cls="w-full h-96 rounded-lg border border-base-300",
+        )
+        for html in plotly_htmls
+    ]
+
+    return Div(
+        *chart_elements,
+        cls="flex flex-col gap-3 my-2",
     )

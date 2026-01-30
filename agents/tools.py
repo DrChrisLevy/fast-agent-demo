@@ -148,6 +148,8 @@ def run_code(code: str) -> list:
                 "image_url": f"data:image/png;base64,{img_base64}",
             }
         )
+    for html in result.get("plotly_htmls", []):
+        content.append({"type": "plotly_html", "html": html})
     return content
 
 
@@ -174,6 +176,6 @@ Execute Python code in a secure Modal sandbox environment.
 - **Install any package** — Use `os.system("pip install <package>")` or `subprocess`.
 - **Fully isolated sandbox** — Run anything safely: shell commands, downloads, scripts. Nothing escapes.
 - **Use `print()` for output** — stdout is captured and returned. Always print results you want to see.
-- **Plots are auto-captured** — Just create matplotlib/seaborn figures normally. Don't call `plt.show()` or try to display/encode images manually. All open figures are automatically captured and returned as images after your code runs. For multi-part analyses, prefer multiple `plt.figure()` calls over dense subplots—each figure becomes a separate image.
+- **Plots are auto-captured** — Just create matplotlib/seaborn/plotly figures normally. Don't call `plt.show()` or try to display/encode images manually. All open figures are automatically captured and returned after your code runs. Matplotlib figures become images; **Plotly figures become interactive HTML** (no need for kaleido or `to_image()`—just create the `fig` object and it will render interactively). For multi-part analyses, prefer multiple `plt.figure()` calls over dense subplots.
 """,
 }

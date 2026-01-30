@@ -28,13 +28,14 @@ class TestRealModalSandbox:
             "stdout": "Hello, World!\n",
             "stderr": "",
             "images": [],
+            "plotly_htmls": [],
         }
         resp = sb.run_code("x=1")
-        assert resp == {"stdout": "", "stderr": "", "images": []}
+        assert resp == {"stdout": "", "stderr": "", "images": [], "plotly_htmls": []}
         resp = sb.run_code("y=x+1\nprint(y)")
-        assert resp == {"stdout": "2\n", "stderr": "", "images": []}
+        assert resp == {"stdout": "2\n", "stderr": "", "images": [], "plotly_htmls": []}
         resp = sb.run_code("z = y ** 2\nprint(z)")
-        assert resp == {"stdout": "4\n", "stderr": "", "images": []}
+        assert resp == {"stdout": "4\n", "stderr": "", "images": [], "plotly_htmls": []}
         sb.terminate()
 
     def test_code_sandbox_test2(self):
@@ -44,6 +45,7 @@ class TestRealModalSandbox:
             "stdout": "3.14\n13.14\n",
             "stderr": "",
             "images": [],
+            "plotly_htmls": [],
         }
         sb.terminate()
 
@@ -54,6 +56,7 @@ class TestRealModalSandbox:
             "stdout": "1 2 3\n",
             "stderr": "",
             "images": [],
+            "plotly_htmls": [],
         }
         sb.terminate()
 
@@ -64,6 +67,7 @@ class TestRealModalSandbox:
             "stdout": "1 2 3\n",
             "stderr": "",
             "images": [],
+            "plotly_htmls": [],
         }
         sb.terminate()
 
@@ -125,6 +129,7 @@ class TestRealModalSandbox:
             "std_dev: 7.0710678118654755\n  sum: 100\n  count: 5\nGeometric mean: 18.64\n",
             "stderr": "",
             "images": [],
+            "plotly_htmls": [],
         }
 
         # Test 3: Handle errors gracefully
@@ -145,6 +150,7 @@ class TestRealModalSandbox:
             "stdout": "Caught error: ZeroDivisionError: division by zero\nExecution continues\n",
             "stderr": "",
             "images": [],
+            "plotly_htmls": [],
         }
 
         sb.terminate()
@@ -160,6 +166,7 @@ class TestRealModalSandbox:
             "stdout": "6\n",
             "stderr": "",
             "images": [],
+            "plotly_htmls": [],
         }
         sb.terminate()
 
