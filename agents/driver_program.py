@@ -84,9 +84,14 @@ for line in tail_f(STDIN_FILE):
     try:
         import plotly.graph_objects as go
 
+        captured_names = []
         for name, obj in list(globals.items()):
             if isinstance(obj, go.Figure):
                 plotly_htmls.append(obj.to_html(full_html=False, include_plotlyjs="cdn"))
+                captured_names.append(name)
+        # Clean up figures after capturing (like matplotlib's plt.close("all"))
+        for name in captured_names:
+            del globals[name]
     except ImportError:
         pass  # plotly not available
 
