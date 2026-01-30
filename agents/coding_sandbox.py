@@ -43,7 +43,8 @@ class ModalSandbox:
             "scikit-learn",  # data science core
             "matplotlib",
             "seaborn",
-            "plotly",  # visualization
+            "plotly",
+            "kaleido",  # visualization (kaleido for plotly static export)
             "requests",
             "beautifulsoup4",
             "lxml",  # web/scraping

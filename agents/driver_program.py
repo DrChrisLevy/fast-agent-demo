@@ -79,7 +79,7 @@ for line in tail_f(STDIN_FILE):
     except ImportError:
         pass  # matplotlib not available
 
-    # Capture any Plotly figures as interactive HTML
+    # Capture any Plotly figures as interactive HTML + static PNG for LLM
     plotly_htmls = []
     try:
         import plotly.graph_objects as go
@@ -88,6 +88,12 @@ for line in tail_f(STDIN_FILE):
         for name, obj in list(globals.items()):
             if isinstance(obj, go.Figure):
                 plotly_htmls.append(obj.to_html(full_html=False, include_plotlyjs="cdn"))
+                # Also capture static PNG so the LLM can "see" the chart
+                try:
+                    img_bytes = obj.to_image(format="png", scale=2)
+                    images.append(base64.b64encode(img_bytes).decode("utf-8"))
+                except Exception:
+                    pass  # kaleido not available or failed
                 captured_names.append(name)
         # Clean up figures after capturing (like matplotlib's plt.close("all"))
         for name in captured_names:
