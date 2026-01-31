@@ -63,41 +63,34 @@ for line in tail_f(STDIN_FILE):
         except Exception as e:
             print(f"{type(e).__name__}: {e}", file=sys.stderr)
 
-    # Capture any matplotlib figures as base64 images
+    # Capture matplotlib figures as base64 PNG images
     images = []
     try:
         import matplotlib.pyplot as plt
 
         for fig_num in plt.get_fignums():
-            fig = plt.figure(fig_num)
             buf = BytesIO()
-            fig.savefig(buf, format="png", bbox_inches="tight", dpi=150)
+            plt.figure(fig_num).savefig(buf, format="png", bbox_inches="tight", dpi=150)
             buf.seek(0)
             images.append(base64.b64encode(buf.read()).decode("utf-8"))
-            buf.close()
         plt.close("all")  # Clean up figures after capturing
     except ImportError:
         pass  # matplotlib not available
 
-    # Capture any Plotly figures as interactive HTML + static PNG for LLM
+    # Capture Plotly figures as interactive HTML + static PNG for LLM
     plotly_htmls = []
     try:
         import plotly.graph_objects as go
 
-        captured_names = []
-        for name, obj in list(globals.items()):
-            if isinstance(obj, go.Figure):
-                plotly_htmls.append(obj.to_html(full_html=False, include_plotlyjs="cdn"))
-                # Also capture static PNG so the LLM can "see" the chart
-                try:
-                    img_bytes = obj.to_image(format="png", scale=2)
-                    images.append(base64.b64encode(img_bytes).decode("utf-8"))
-                except Exception:
-                    pass  # kaleido not available or failed
-                captured_names.append(name)
-        # Clean up figures after capturing (like matplotlib's plt.close("all"))
-        for name in captured_names:
-            del globals[name]
+        figures = [(n, o) for n, o in globals.items() if isinstance(o, go.Figure)]
+        for name, fig in figures:
+            plotly_htmls.append(fig.to_html(full_html=False, include_plotlyjs="cdn"))
+            # Also capture static PNG so the LLM can "see" the chart
+            try:
+                images.append(base64.b64encode(fig.to_image(format="png", scale=2)).decode("utf-8"))
+            except Exception:
+                pass  # kaleido not available or export failed
+            del globals[name]  # Clean up figure after capturing
     except ImportError:
         pass  # plotly not available
 
