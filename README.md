@@ -2,7 +2,7 @@
 
 A hackable ChatGPT-like code interpreter for data analysis and code execution. See chat, tool calls, and message traces in real-time.
 
-Built with [FastHTML](https://fastht.ml/) + [DaisyUI](https://daisyui.com/) + [HTMX](https://htmx.org/).
+Built with [FastHTML](https://fastht.ml/) + [DaisyUI](https://daisyui.com/) + [HTMX](https://htmx.org/) + [Modal](https://modal.com).
 
 ## Features
 
@@ -82,7 +82,6 @@ tests/               # pytest tests
 main.py              # FastHTML app and routes
 ```
 
-
 ## Export requirements.txt
 
 ```bash
@@ -91,7 +90,7 @@ uv export --no-hashes --no-dev -o requirements.txt
 
 ## Deploy to [Plash](https://pla.sh/)
 
-```
+```bash
 uv run plash deploy
 ```
 
