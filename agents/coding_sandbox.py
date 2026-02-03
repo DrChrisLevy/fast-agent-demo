@@ -6,6 +6,9 @@ from typing import Any, Dict, Generator, Literal, Optional
 from uuid import uuid4
 
 import modal
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path="plash.env")
 
 
 def get_script_as_string(filepath: str) -> str:
@@ -44,7 +47,6 @@ class ModalSandbox:
             "matplotlib",
             "seaborn",
             "plotly",
-            "kaleido",  # visualization (kaleido for plotly static export)
             "requests",
             "beautifulsoup4",
             "lxml",  # web/scraping
@@ -52,11 +54,13 @@ class ModalSandbox:
             "pyarrow",  # file formats
             "Pillow",
             "tabulate",  # utilities
+            "google-genai",  # Gemini image generation
         )
         .env(
             {
                 "IO_DATA_DIR": IO_DATA_DIR,
                 "STDIN_FILE": STDIN_FILE,
+                "GOOGLE_API_KEY": os.environ.get("GOOGLE_API_KEY", ""),
             }
         )
         # Define the directory/file on the image level to ensure they exist

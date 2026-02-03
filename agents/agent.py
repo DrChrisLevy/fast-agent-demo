@@ -41,7 +41,7 @@ def run_agent(messages, user_id: str):
     while True:
         # Call the LLM
         response = litellm.completion(
-            model="gemini/gemini-3-flash-preview",  # "gemini/gemini-3-flash-preview", #claude-opus-4-5-20251101, gpt-5.2
+            model="claude-opus-4-5-20251101",  # "gemini/gemini-3-flash-preview", #claude-opus-4-5-20251101, gpt-5.2
             messages=messages,
             tools=TOOLS,
             reasoning_effort="low",

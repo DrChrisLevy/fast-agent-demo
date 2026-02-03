@@ -155,7 +155,7 @@ class TestRunCode:
         mock_instance.run_code.return_value = {
             "stdout": "Plot created\n",
             "stderr": "",
-            "images": ["base64img1", "base64img2"],
+            "images": ["iVBORbase64img1", "iVBORbase64img2"],  # PNG magic bytes prefix
         }
         mock_sandbox_class.return_value = mock_instance
 
@@ -164,8 +164,8 @@ class TestRunCode:
         assert isinstance(result, list)
         assert len(result) == 3  # 1 text + 2 images
         assert result[0] == {"type": "text", "text": "stdout:\nPlot created\n"}
-        assert result[1] == {"type": "image_url", "image_url": "data:image/png;base64,base64img1"}
-        assert result[2] == {"type": "image_url", "image_url": "data:image/png;base64,base64img2"}
+        assert result[1] == {"type": "image_url", "image_url": "data:image/png;base64,iVBORbase64img1"}
+        assert result[2] == {"type": "image_url", "image_url": "data:image/png;base64,iVBORbase64img2"}
 
     @patch("agents.tools.ModalSandbox")
     def test_run_code_returns_plotly_htmls(self, mock_sandbox_class):
@@ -194,7 +194,7 @@ class TestRunCode:
         mock_instance.run_code.return_value = {
             "stdout": "Mixed output\n",
             "stderr": "",
-            "images": ["base64img"],
+            "images": ["/9j/base64img"],  # JPEG magic bytes prefix
             "plotly_htmls": ["<div>plotly</div>"],
         }
         mock_sandbox_class.return_value = mock_instance
@@ -204,5 +204,5 @@ class TestRunCode:
         assert isinstance(result, list)
         assert len(result) == 3  # 1 text + 1 image + 1 plotly
         assert result[0] == {"type": "text", "text": "stdout:\nMixed output\n"}
-        assert result[1] == {"type": "image_url", "image_url": "data:image/png;base64,base64img"}
+        assert result[1] == {"type": "image_url", "image_url": "data:image/jpeg;base64,/9j/base64img"}
         assert result[2] == {"type": "plotly_html", "html": "<div>plotly</div>"}

@@ -40,6 +40,9 @@ def tail_f(filename: str) -> Generator[str, None, None]:
             yield line
 
 
+# Track captured objects by id() to avoid duplicate captures across code executions
+_captured_ids: set[int] = set()
+
 globals: dict[str, Any] = {}
 for line in tail_f(STDIN_FILE):
     line = line.strip()
@@ -63,36 +66,89 @@ for line in tail_f(STDIN_FILE):
         except Exception as e:
             print(f"{type(e).__name__}: {e}", file=sys.stderr)
 
-    # Capture matplotlib figures as base64 PNG images
+    # Capture any matplotlib figures as base64 images
     images = []
     try:
         import matplotlib.pyplot as plt
 
         for fig_num in plt.get_fignums():
+            fig = plt.figure(fig_num)
             buf = BytesIO()
-            plt.figure(fig_num).savefig(buf, format="png", bbox_inches="tight", dpi=150)
+            fig.savefig(buf, format="png", bbox_inches="tight", dpi=150)
             buf.seek(0)
             images.append(base64.b64encode(buf.read()).decode("utf-8"))
+            buf.close()
         plt.close("all")  # Clean up figures after capturing
     except ImportError:
         pass  # matplotlib not available
 
-    # Capture Plotly figures as interactive HTML + static PNG for LLM
+    # Capture any Plotly figures as interactive HTML + static PNG for LLM
     plotly_htmls = []
     try:
         import plotly.graph_objects as go
 
-        figures = [(n, o) for n, o in globals.items() if isinstance(o, go.Figure)]
-        for name, fig in figures:
-            plotly_htmls.append(fig.to_html(full_html=False, include_plotlyjs="cdn"))
-            # Also capture static PNG so the LLM can "see" the chart
-            try:
-                images.append(base64.b64encode(fig.to_image(format="png", scale=2)).decode("utf-8"))
-            except Exception:
-                pass  # kaleido not available or export failed
-            del globals[name]  # Clean up figure after capturing
+        for name, obj in list(globals.items()):
+            if isinstance(obj, go.Figure):
+                obj_id = id(obj)
+                if obj_id in _captured_ids:
+                    continue  # Already captured, skip
+                _captured_ids.add(obj_id)
+                plotly_htmls.append(obj.to_html(full_html=False, include_plotlyjs="cdn"))
+                # TODO: Add static PNG export so LLM can see charts (needs kaleido)
     except ImportError:
         pass  # plotly not available
+
+    # Capture PIL Images from globals (e.g., from Gemini image generation)
+    try:
+        from PIL import Image as PILImage
+
+        def resize_for_api(img: PILImage.Image, max_size_bytes: int = 4_000_000, max_dim: int = 4096) -> bytes:
+            """Resize and compress image to fit within API limits."""
+            original_size = (img.width, img.height)
+
+            # Resize if dimensions are too large
+            if img.width > max_dim or img.height > max_dim:
+                img.thumbnail((max_dim, max_dim), PILImage.Resampling.LANCZOS)
+                print(f"Image resized: {original_size} -> {img.size} (max_dim={max_dim})")
+
+            # Convert RGBA to RGB for JPEG (smaller file size)
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+
+            # Try JPEG with decreasing quality until under size limit
+            for quality in [85, 70, 50, 30]:
+                buf = BytesIO()
+                img.save(buf, format="JPEG", quality=quality, optimize=True)
+                if buf.tell() <= max_size_bytes:
+                    if quality < 85:
+                        print(f"Image compressed: quality={quality}, size={buf.tell() / 1024:.0f}KB")
+                    buf.seek(0)
+                    return buf.read()
+
+            # If still too large, resize further
+            while img.width > 512 or img.height > 512:
+                prev_size = img.size
+                img.thumbnail((img.width // 2, img.height // 2), PILImage.Resampling.LANCZOS)
+                buf = BytesIO()
+                img.save(buf, format="JPEG", quality=50, optimize=True)
+                print(f"Image resized further: {prev_size} -> {img.size}, size={buf.tell() / 1024:.0f}KB")
+                if buf.tell() <= max_size_bytes:
+                    buf.seek(0)
+                    return buf.read()
+
+            buf.seek(0)
+            return buf.read()
+
+        for name, obj in list(globals.items()):
+            if isinstance(obj, PILImage.Image):
+                obj_id = id(obj)
+                if obj_id in _captured_ids:
+                    continue  # Already captured, skip
+                _captured_ids.add(obj_id)
+                img_bytes = resize_for_api(obj)
+                images.append(base64.b64encode(img_bytes).decode("utf-8"))
+    except ImportError:
+        pass  # Pillow not available
 
     with open(os.path.join(IO_DATA_DIR, f"{command_id}.txt"), "w") as f:
         f.write(
