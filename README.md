@@ -11,6 +11,8 @@ Built with [FastHTML](https://fastht.ml/) + [DaisyUI](https://daisyui.com/) + [H
 - **Vision-enabled tool results** — The agent sees stdout, stderr, *and* any generated images (plots, charts, etc.)
 - **Auto-captured plots** — Matplotlib/seaborn figures are captured as images; Plotly figures are captured as both interactive HTML (for you) and static images (for the agent)
 - **Interactive Plotly charts** — Plotly figures render as fully interactive charts you can zoom, pan, and hover—while the agent still sees them via vision
+- **Gemini image generation** — Generate and edit images using Google's Gemini API directly in code
+- **Auto-captured PIL images** — Any PIL Image assigned to a variable is automatically captured and shown
 - **Data science ready** — pandas, numpy, scipy, scikit-learn, matplotlib, seaborn, plotly, kaleido, and more pre-installed; install any package with `pip`
 - **Per-user isolation** — Each browser session gets its own sandbox, which spins up on page load; refreshing resets to a fresh sandbox and terminates the old one
 - **Multi-provider LLM** — Uses [LiteLLM](https://docs.litellm.ai/) for easy model switching
@@ -38,7 +40,7 @@ FAST_APP_SECRET=
 # Currently hardcoded to Claude Opus in agents/agent.py (change the model= line to switch)
 ANTHROPIC_API_KEY=   # For Claude models
 OPENAI_API_KEY=      # For GPT models (optional)
-GOOGLE_API_KEY=      # For Gemini models (optional)
+GOOGLE_API_KEY=      # For Gemini models and image generation (optional)
 ```
 
 ## Development
