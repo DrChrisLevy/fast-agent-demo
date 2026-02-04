@@ -93,13 +93,21 @@ async def index(req):
                     hx_swap="innerHTML",
                     cls="btn btn-ghost btn-sm",
                 ),
-                cls="navbar-end items-center",
+                # Mobile toggle for trace drawer
+                Label(
+                    "Trace",
+                    htmlFor="trace-drawer",
+                    cls="btn btn-ghost btn-sm lg:hidden",
+                ),
+                cls="navbar-end items-center gap-1",
             ),
             cls="navbar bg-base-100 border-b border-base-300",
         ),
-        # Main split layout
+        # Main layout with drawer for mobile
         Div(
-            # LEFT SIDE - Chat interface
+            # Drawer toggle checkbox
+            Input(type="checkbox", id="trace-drawer", cls="drawer-toggle"),
+            # Drawer content (chat interface - always visible)
             Div(
                 Div(
                     id="chat-container",
@@ -110,27 +118,31 @@ async def index(req):
                 # Input area
                 Div(
                     ChatInput(),
-                    cls="p-4 border-t border-base-300",
+                    cls="p-4 border-t border-base-300 shrink-0",
                 ),
-                cls="flex flex-col min-h-0 border-r border-base-300 bg-base-200",
+                cls="drawer-content flex flex-col h-full min-h-0 bg-base-200",
             ),
-            # RIGHT SIDE - Message trace view
+            # Drawer side (trace panel - toggleable on mobile, always visible on lg+)
             Div(
+                Label(htmlFor="trace-drawer", aria_label="close sidebar", cls="drawer-overlay"),
                 Div(
-                    Span(
-                        "MESSAGE TRACE",
-                        cls="font-bold text-xs tracking-wider opacity-70",
+                    Div(
+                        Span(
+                            "MESSAGE TRACE",
+                            cls="font-bold text-xs tracking-wider opacity-70",
+                        ),
+                        cls="p-3 border-b border-base-300 bg-base-100 sticky top-0 shrink-0",
                     ),
-                    cls="p-3 border-b border-base-300 bg-base-100 sticky top-0",
+                    Div(
+                        TraceView(messages),
+                        id="trace-container",
+                        cls="overflow-y-auto flex-1 min-h-0",
+                    ),
+                    cls="flex flex-col h-full w-80 lg:w-[35vw] xl:w-[40vw] 2xl:w-[45vw] bg-base-100 border-l border-base-300",
                 ),
-                Div(
-                    TraceView(messages),
-                    id="trace-container",
-                    cls="overflow-y-auto flex-1 min-h-0",
-                ),
-                cls="flex flex-col min-h-0 bg-base-100",
+                cls="drawer-side z-40 h-full",
             ),
-            cls="grid grid-cols-2 flex-1 min-h-0",
+            cls="drawer drawer-end lg:drawer-open flex-1 min-h-0 h-full",
         ),
         cls="h-screen flex flex-col overflow-hidden bg-base-200",
     )
