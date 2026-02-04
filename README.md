@@ -13,7 +13,7 @@ Built with [FastHTML](https://fastht.ml/) + [DaisyUI](https://daisyui.com/) + [H
 - **Interactive Plotly charts** — Plotly figures render as fully interactive charts you can zoom, pan, and hover
 - **Gemini image generation** — Generate and edit images using Google's Gemini API directly in code
 - **Auto-captured PIL images** — Any PIL Image assigned to a variable is automatically captured and shown
-- **Data science ready** — pandas, numpy, scipy, scikit-learn, matplotlib, seaborn, plotly, kaleido, and more pre-installed; install any package with `pip`
+- **Data science ready** — pandas, numpy, scipy, scikit-learn, matplotlib, seaborn, plotly, and more pre-installed; install any package with `pip`
 - **Per-user isolation** — Each browser session gets its own sandbox, which spins up on page load; refreshing resets to a fresh sandbox and terminates the old one
 - **Multi-provider LLM** — Uses [LiteLLM](https://docs.litellm.ai/) for easy model switching
 
