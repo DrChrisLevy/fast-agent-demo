@@ -1,6 +1,6 @@
 # Agent Chat
 
-A hackable ChatGPT-like code interpreter for data analysis and code execution. See chat, tool calls, and message traces in real-time.
+A hackable ChatGPT-like code interpreter for data analysis, code execution, and image generation. See chat, tool calls, and message traces in real-time.
 
 Built with [FastHTML](https://fastht.ml/) + [DaisyUI](https://daisyui.com/) + [HTMX](https://htmx.org/) + [Modal](https://modal.com).
 
