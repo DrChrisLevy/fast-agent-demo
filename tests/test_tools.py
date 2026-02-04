@@ -3,11 +3,13 @@
 from unittest.mock import MagicMock, patch
 
 import agents.tools as tools_module
+
 from agents.tools import (
     TOOL_FUNCTIONS,
     TOOLS,
     current_user_id,
     get_sandbox,
+    init_sandbox,
     reset_sandbox,
     run_code,
 )
@@ -97,6 +99,70 @@ class TestSandboxManagement:
         reset_sandbox(TEST_USER_ID)  # Should not raise despite termination error
 
         assert TEST_USER_ID not in tools_module.user_sandboxes
+
+    @patch("agents.tools.ModalSandbox")
+    def test_get_sandbox_uses_context_var_when_user_id_none(self, mock_sandbox_class):
+        """get_sandbox should use current_user_id context var when user_id is None."""
+        mock_instance = MagicMock()
+        mock_sandbox_class.return_value = mock_instance
+
+        # Set context variable
+        current_user_id.set(TEST_USER_ID)
+
+        result = get_sandbox()  # No user_id passed
+
+        mock_sandbox_class.assert_called_once()
+        assert result is mock_instance
+        assert TEST_USER_ID in tools_module.user_sandboxes
+
+    @patch("agents.tools.ModalSandbox")
+    def test_init_sandbox_creates_new_sandbox(self, mock_sandbox_class):
+        """init_sandbox should create a new sandbox for a user."""
+        import asyncio
+
+        mock_instance = MagicMock()
+        mock_sandbox_class.return_value = mock_instance
+
+        asyncio.run(init_sandbox(TEST_USER_ID))
+
+        mock_sandbox_class.assert_called_once()
+        assert TEST_USER_ID in tools_module.user_sandboxes
+
+    @patch("agents.tools.ModalSandbox")
+    def test_init_sandbox_terminates_existing_sandbox(self, mock_sandbox_class):
+        """init_sandbox should terminate existing sandbox before creating new one."""
+        import asyncio
+
+        old_instance = MagicMock()
+        new_instance = MagicMock()
+        mock_sandbox_class.side_effect = [old_instance, new_instance]
+
+        # Create an existing sandbox first
+        get_sandbox(TEST_USER_ID)
+
+        # Now init should terminate old and create new
+        asyncio.run(init_sandbox(TEST_USER_ID))
+
+        old_instance.terminate.assert_called_once()
+        assert tools_module.user_sandboxes[TEST_USER_ID] is new_instance
+
+    @patch("agents.tools.ModalSandbox")
+    def test_init_sandbox_ignores_termination_errors(self, mock_sandbox_class):
+        """init_sandbox should ignore errors during termination of existing sandbox."""
+        import asyncio
+
+        old_instance = MagicMock()
+        old_instance.terminate.side_effect = Exception("Termination failed")
+        new_instance = MagicMock()
+        mock_sandbox_class.side_effect = [old_instance, new_instance]
+
+        # Create an existing sandbox first
+        get_sandbox(TEST_USER_ID)
+
+        # Should not raise despite termination error
+        asyncio.run(init_sandbox(TEST_USER_ID))
+
+        assert tools_module.user_sandboxes[TEST_USER_ID] is new_instance
 
 
 class TestRunCode:
