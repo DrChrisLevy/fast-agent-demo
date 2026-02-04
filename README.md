@@ -9,8 +9,8 @@ Built with [FastHTML](https://fastht.ml/) + [DaisyUI](https://daisyui.com/) + [H
 - **Secure cloud sandboxes** — Python runs in isolated [Modal](https://modal.com) containers, fully sandboxed from the host
 - **Persistent state** — Variables, imports, and definitions carry over between code executions
 - **Vision-enabled tool results** — The agent sees stdout, stderr, *and* any generated images (plots, charts, etc.)
-- **Auto-captured plots** — Matplotlib/seaborn figures are captured as images; Plotly figures are captured as both interactive HTML (for you) and static images (for the agent)
-- **Interactive Plotly charts** — Plotly figures render as fully interactive charts you can zoom, pan, and hover—while the agent still sees them via vision
+- **Auto-captured plots** — Matplotlib/seaborn figures are captured as images; Plotly figures are captured as interactive HTML for you to explore
+- **Interactive Plotly charts** — Plotly figures render as fully interactive charts you can zoom, pan, and hover
 - **Gemini image generation** — Generate and edit images using Google's Gemini API directly in code
 - **Auto-captured PIL images** — Any PIL Image assigned to a variable is automatically captured and shown
 - **Data science ready** — pandas, numpy, scipy, scikit-learn, matplotlib, seaborn, plotly, kaleido, and more pre-installed; install any package with `pip`

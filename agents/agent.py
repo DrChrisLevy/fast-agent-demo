@@ -72,10 +72,23 @@ def run_agent(messages, user_id: str):
             args = json.loads(tool_call.function.arguments)
             result = TOOL_FUNCTIONS[name](**args)
 
+            # Full result for UI (includes plotly_html for rendering)
             tool_msg = {
                 "role": "tool",
                 "tool_call_id": tool_call.id,
                 "content": result,
             }
-            messages.append(tool_msg)
             yield tool_msg
+
+            # Filtered result for LLM (only valid content types)
+            # If result is a list of content blocks, filter out non-LLM types like plotly_html
+            if isinstance(result, list):
+                llm_content = [c for c in result if c.get("type") in ("text", "image_url")]
+            else:
+                llm_content = result  # String or other format, pass through
+            llm_tool_msg = {
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": llm_content,
+            }
+            messages.append(llm_tool_msg)

@@ -150,6 +150,44 @@ class TestRunAgentYieldFormat:
             assert events[0] is messages[2]
 
 
+class TestRunAgentContentFiltering:
+    """Tests for content block filtering (UI vs LLM)."""
+
+    def test_plotly_html_filtered_from_llm_messages(self):
+        """plotly_html should be in yielded message but filtered from LLM messages."""
+        mock_tc = _mock_tool_call("call_123", "run_code", '{"code": "make chart"}')
+
+        # Tool returns content blocks including plotly_html
+        tool_result = [
+            {"type": "text", "text": "stdout output"},
+            {"type": "image_url", "image_url": "data:image/png;base64,abc123"},
+            {"type": "plotly_html", "html": "<div>interactive chart</div>"},
+        ]
+
+        with patch("agents.agent.litellm.completion") as mock_completion:
+            with patch("agents.agent.TOOL_FUNCTIONS", {"run_code": lambda **kwargs: tool_result}):
+                mock_completion.side_effect = [
+                    _mock_llm_response(content=None, tool_calls=[mock_tc]),
+                    _mock_llm_response("Done!"),
+                ]
+
+                messages = [{"role": "user", "content": "Make a chart"}]
+                events = _filter_message_events(list(run_agent(messages, TEST_USER_ID)))
+
+                # Yielded tool message should have full content (for UI)
+                tool_event = events[1]
+                assert tool_event["role"] == "tool"
+                assert len(tool_event["content"]) == 3
+                assert any(c.get("type") == "plotly_html" for c in tool_event["content"])
+
+                # Messages list (for LLM) should have filtered content
+                tool_msg_in_messages = [m for m in messages if m.get("role") == "tool"][0]
+                assert len(tool_msg_in_messages["content"]) == 2
+                assert not any(c.get("type") == "plotly_html" for c in tool_msg_in_messages["content"])
+                assert any(c.get("type") == "text" for c in tool_msg_in_messages["content"])
+                assert any(c.get("type") == "image_url" for c in tool_msg_in_messages["content"])
+
+
 class TestRunAgentMessageHistory:
     """Tests for message history management."""
 
