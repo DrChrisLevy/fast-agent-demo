@@ -51,5 +51,5 @@ Run `./dev test` to run the test suite. This skips slow integration tests by def
 - `./dev test` - Run tests (skips `@pytest.mark.slow`)
 - `./dev test -m slow` - Run only slow integration tests (hits real APIs)
 - `./dev test -m ""` - Run ALL tests (including slow)
-- `./dev test --cov=agents --cov=main --cov-report=term-missing` - Run with coverage
+- `./dev test -m "" --cov=agents --cov=main --cov-report=term-missing` - Run all tests with coverage
 
