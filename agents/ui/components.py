@@ -185,9 +185,14 @@ def ToolResultBlock(event):
 SCROLL_JS = "let c = document.getElementById('scroll-container'); if(c) c.scrollTop = c.scrollHeight;"
 
 
+_turn_counter = 0
+
+
 def make_render_state():
     """Create mutable state for render_event across a streaming session."""
-    return {"total_tokens": 0, "turn": 0}
+    global _turn_counter
+    _turn_counter += 1
+    return {"total_tokens": 0, "turn": _turn_counter}
 
 
 def render_event(event, state):
