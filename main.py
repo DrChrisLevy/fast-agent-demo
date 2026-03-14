@@ -1,8 +1,9 @@
 # ruff: noqa: F403, F405
 """
-Agent Chat Web App
+Agent Chat Web App — powered by liteagent.
 
-A hackable interface for working with agents - see chat, tool calls, and traces.
+Single-stream interface with real-time token streaming, inline tool execution,
+and steering/abort controls.
 """
 
 import asyncio
@@ -10,30 +11,16 @@ import uuid
 
 from dotenv import load_dotenv
 from fasthtml.common import *
-from agents.agent import run_agent
-from agents.tools import init_sandbox, get_messages, clear_messages, reset_sandbox
-from agents.ui import (
-    ChatMessage,
-    ChatInput,
-    ChatImages,
-    ChatPlotly,
-    TraceView,
-    TraceUpdate,
-    TraceAppend,
-    ThinkingIndicator,
-    TokenCountUpdate,
-    is_usage_update,
-    is_final_response,
-    is_tool_result,
-    get_images_from_tool_result,
-    get_plotly_htmls_from_tool_result,
-)
-from agents.prompts import SYSTEM_PROMPT
+from agents.tools import get_agent, reset_agent, reset_sandbox, init_sandbox
+from agents.ui.components import ChatMessage, ChatInput, TokenCountUpdate, render_event, make_render_state
 
 load_dotenv(dotenv_path="plash.env")
 
 
 # ============ App Setup ============
+
+# Pending prompts: POST /chat stores the message, GET /agent-stream picks it up
+pending_prompts: dict[str, str] = {}
 
 
 def before(req, sess):
@@ -46,15 +33,11 @@ def before(req, sess):
 beforeware = Beforeware(before, skip=[])
 
 hdrs = (
-    # Favicon
     Link(rel="icon", type="image/x-icon", href="/static/favicon.ico"),
-    # DaisyUI + Tailwind
     Link(href="https://cdn.jsdelivr.net/npm/daisyui@5/daisyui.css", rel="stylesheet"),
     Link(href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css", rel="stylesheet"),
     Script(src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"),
-    # HTMX SSE extension
     Script(src="https://unpkg.com/htmx-ext-sse@2.2.1/sse.js"),
-    # Lock viewport
     Style("html, body { height: 100%; overflow: hidden; margin: 0; }"),
 )
 app, rt = fast_app(
@@ -73,19 +56,23 @@ app, rt = fast_app(
 @rt("/", methods=["GET"])
 async def index(req):
     user_id = req.state.user_id
-    # Clear messages on page load (refresh = clear)
-    clear_messages(user_id)
-    messages = get_messages(user_id)
-    # Initialize sandbox in background (terminate old, create new)
+    reset_agent(user_id)
+    reset_sandbox(user_id)
     asyncio.create_task(init_sandbox(user_id))
 
-    return Title("FastAgent"), Div(
-        # Header - DaisyUI navbar
+    return Title("Agent Chat"), Div(
+        # Header
         Nav(
             Div(H1("Agent Chat", cls="text-xl font-bold"), cls="navbar-start"),
             Div(cls="navbar-center"),
             Div(
                 Span("0 tokens", id="token-count", cls="text-sm opacity-70 mr-4"),
+                Button(
+                    "Stop",
+                    id="stop-btn",
+                    hx_post="/stop",
+                    cls="btn btn-ghost btn-sm hidden",
+                ),
                 Button(
                     "Clear",
                     hx_post="/clear",
@@ -97,155 +84,157 @@ async def index(req):
             ),
             cls="navbar bg-base-100 border-b border-base-300",
         ),
-        # Main split layout
+        # Single stream view
         Div(
-            # LEFT SIDE - Chat interface
+            Div(id="chat-container", cls="flex flex-col gap-2 max-w-3xl mx-auto w-full"),
             Div(
-                Div(
-                    id="chat-container",
-                    cls="flex flex-col gap-2 p-4 overflow-y-auto flex-1 min-h-0",
-                ),
-                # Response streaming area
-                Div(id="response-area", cls="px-4"),
-                # Input area
-                Div(
-                    ChatInput(),
-                    cls="p-4 border-t border-base-300",
-                ),
-                cls="flex flex-col min-h-0 border-r border-base-300 bg-base-200",
+                Pre(id="streaming-text", cls="whitespace-pre-wrap font-sans text-base leading-relaxed m-0 px-0"),
+                id="streaming-area",
+                cls="max-w-3xl mx-auto w-full",
             ),
-            # RIGHT SIDE - Message trace view
-            Div(
-                Div(
-                    Span(
-                        "MESSAGE TRACE",
-                        cls="font-bold text-xs tracking-wider opacity-70",
-                    ),
-                    cls="p-3 border-b border-base-300 bg-base-100 sticky top-0",
-                ),
-                Div(
-                    TraceView(messages),
-                    id="trace-container",
-                    cls="overflow-y-auto flex-1 min-h-0",
-                ),
-                cls="flex flex-col min-h-0 bg-base-100",
-            ),
-            cls="grid grid-cols-2 flex-1 min-h-0",
+            cls="flex-1 overflow-y-auto p-4",
+            id="scroll-container",
+        ),
+        # Input area (pinned to bottom)
+        Div(
+            Div(ChatInput(), cls="max-w-3xl mx-auto w-full"),
+            cls="p-4 border-t border-base-300 bg-base-200",
         ),
         cls="h-screen flex flex-col overflow-hidden bg-base-200",
-    )
-
-
-@rt("/clear", methods=["POST"])
-async def clear_chat(req):
-    user_id = req.state.user_id
-    clear_messages(user_id)
-    reset_sandbox(user_id)
-    # Initialize sandbox in background (terminate old, create new)
-    asyncio.create_task(init_sandbox(user_id))
-    return (
-        "",  # Clear chat container
-        Div(
-            TraceView([]),
-            id="trace-container",
-            hx_swap_oob="true",
-            cls="overflow-y-auto flex-1 min-h-0",
-        ),  # Clear trace
-        TokenCountUpdate(0),  # Reset token counter
     )
 
 
 @rt("/chat", methods=["POST"])
 def send_message(req, message: str):
     user_id = req.state.user_id
-    messages = get_messages(user_id)
     if not message.strip():
         return ""
 
-    # Ensure system prompt exists (so trace shows it before agent runs)
-    if not messages or messages[0].get("role") != "system":
-        messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+    agent = get_agent(user_id)
 
-    # Add user message to history
-    messages.append({"role": "user", "content": message})
+    if agent.state.is_streaming:
+        # Agent is running — steer it
+        agent.steer(message)
+        return Div(
+            ChatMessage("user", f"[steer] {message}"),
+            id="chat-container",
+            hx_swap_oob="beforeend",
+        )
 
-    # Return user message + SSE container + trace update (shows system + user)
+    # Normal prompt — store and trigger SSE
+    pending_prompts[user_id] = message
     return (
+        # Append user message to chat
         Div(ChatMessage("user", message), id="chat-container", hx_swap_oob="beforeend"),
+        # SSE streaming container — outerHTML so SSE attributes land in DOM
         Div(
-            ThinkingIndicator(),
-            Div(id="agent-events"),
+            Pre(id="streaming-text", cls="whitespace-pre-wrap font-sans text-base leading-relaxed m-0 px-0"),
             hx_ext="sse",
             sse_connect="/agent-stream",
             sse_swap="AgentEvent",
             sse_close="close",
-            hx_target="#agent-events",
-            hx_swap="innerHTML",
-            id="response-area",
-            hx_swap_oob="true",
+            hx_swap="none",
+            id="streaming-area",
+            hx_swap_oob="outerHTML",
+            cls="max-w-3xl mx-auto w-full",
         ),
-        TraceUpdate(messages),
+        # Show stop button
+        Button("Stop", id="stop-btn", hx_post="/stop", cls="btn btn-error btn-sm", hx_swap_oob="true"),
     )
 
 
 @rt("/agent-stream", methods=["GET"])
 async def agent_stream(req):
-    """SSE endpoint that streams agent messages."""
+    """SSE endpoint — bridges liteagent events to HTMX."""
     user_id = req.state.user_id
-    messages = get_messages(user_id)
+    message = pending_prompts.pop(user_id, None)
+    if not message:
+        return ""
+
+    agent = get_agent(user_id)
+    queue = asyncio.Queue()
+    unsub = agent.subscribe(lambda e: queue.put_nowait(e))
+
+    # Start agent in background
+    asyncio.create_task(agent.prompt(message))
 
     async def event_stream():
-        for msg in run_agent(messages, user_id):
-            if is_usage_update(msg):
-                # Usage update: update token count
-                yield sse_message(TokenCountUpdate(msg["total"]), event="AgentEvent")
-                await asyncio.sleep(0.01)
-            elif is_final_response(msg):
-                # Final response: append to chat, clear thinking indicator, append to trace
-                content = msg.get("content") if isinstance(msg, dict) else msg.content
-                yield sse_message(
-                    Div(
-                        Div(
-                            ChatMessage("assistant", content),
-                            id="chat-container",
-                            hx_swap_oob="beforeend",
-                        ),
-                        Div(id="response-area", hx_swap_oob="true"),
-                        TraceAppend(msg),
-                    ),
-                    event="AgentEvent",
-                )
-                await asyncio.sleep(0.01)
-                yield sse_message(Div(), event="close")
-            else:
-                # Intermediate (tool calls or tool results): append to trace
-                # Also show images/charts in chat if this is a tool result with visuals
-                if is_tool_result(msg):
-                    images = get_images_from_tool_result(msg)
-                    plotly_htmls = get_plotly_htmls_from_tool_result(msg)
-                    if images or plotly_htmls:
-                        chat_visuals = []
-                        if images:
-                            chat_visuals.append(ChatImages(images))
-                        if plotly_htmls:
-                            chat_visuals.append(ChatPlotly(plotly_htmls))
-                        yield sse_message(
-                            Div(
-                                Div(
-                                    *chat_visuals,
-                                    id="chat-container",
-                                    hx_swap_oob="beforeend",
-                                ),
-                                TraceAppend(msg),
-                            ),
-                            event="AgentEvent",
-                        )
-                        await asyncio.sleep(0.01)
-                        continue
-                yield sse_message(TraceAppend(msg), event="AgentEvent")
-                await asyncio.sleep(0.01)
+        state = make_render_state()
+        try:
+            while True:
+                event = await asyncio.wait_for(queue.get(), timeout=300)
+                etype = event.get("type", "?")
+                delta_type = event.get("delta_type", "")
+                extra = ""
+                if etype == "message_end":
+                    msg = event.get("message", {})
+                    extra = f" role={msg.get('role')} stop={msg.get('stop_reason')} content={str(msg.get('content', ''))[:60]}"
+                elif etype == "message_start":
+                    extra = f" role={event.get('message', {}).get('role')}"
+                elif etype == "tool_execution_start":
+                    extra = f" tool={event.get('tool_name')}"
+                elif etype == "tool_execution_end":
+                    extra = f" tool={event.get('tool_name')} error={event.get('is_error')}"
+                elif delta_type == "text_delta":
+                    extra = f" delta={repr(event.get('delta', {}).get('content', '')[:40])}"
+                elif delta_type == "thinking_delta":
+                    extra = f" delta={repr(event.get('delta', {}).get('reasoning_content', '')[:40])}"
+                print(f"[SSE] {etype}{f' ({delta_type})' if delta_type else ''}{extra} [turn={state['turn']}]")
+
+                html = render_event(event, state)
+                if html is not None:
+                    yield sse_message(html, event="AgentEvent")
+                    await asyncio.sleep(0.01)
+                else:
+                    print("[SSE]   -> no HTML rendered")
+                if event.get("type") == "agent_end":
+                    yield sse_message(Div(), event="close")
+                    break
+        except asyncio.TimeoutError:
+            print("[SSE] TIMEOUT")
+            yield sse_message(Div(), event="close")
+        except Exception as e:
+            print(f"[SSE] ERROR: {e}")
+            import traceback
+
+            traceback.print_exc()
+            yield sse_message(Div(), event="close")
+        finally:
+            unsub()
+            print("[SSE] stream ended")
 
     return EventStream(event_stream())
+
+
+@rt("/stop", methods=["POST"])
+def stop_agent(req):
+    user_id = req.state.user_id
+    agent = get_agent(user_id)
+    agent.abort()
+    return Button("Stop", id="stop-btn", hx_swap_oob="true", cls="btn btn-ghost btn-sm hidden", hx_post="/stop")
+
+
+@rt("/clear", methods=["POST"])
+async def clear_chat(req):
+    user_id = req.state.user_id
+    agent = get_agent(user_id)
+    if agent.state.is_streaming:
+        agent.abort()
+        await agent.wait_for_idle()
+    reset_agent(user_id)
+    reset_sandbox(user_id)
+    asyncio.create_task(init_sandbox(user_id))
+
+    return (
+        "",  # Clear chat container
+        Div(
+            Pre(id="streaming-text", cls="whitespace-pre-wrap font-sans text-base leading-relaxed m-0 px-0"),
+            id="streaming-area",
+            hx_swap_oob="outerHTML",
+            cls="max-w-3xl mx-auto w-full",
+        ),
+        TokenCountUpdate(0),
+    )
 
 
 serve()
