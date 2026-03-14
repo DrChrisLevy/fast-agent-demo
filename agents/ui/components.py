@@ -228,8 +228,37 @@ def render_event(event, state):
             )
 
     elif t == "message_update" and delta_type == "tool_call_delta":
-        # TODO: stream tool call args once we have a target element for them
-        pass
+        delta = event.get("delta", {})
+        tool_calls = delta.get("tool_calls", [])
+        if tool_calls:
+            tc = tool_calls[0]
+            tc_id = tc.get("id", "")
+            name = tc.get("function", {}).get("name", "")
+            args_chunk = tc.get("function", {}).get("arguments", "")
+
+            # First delta for a new tool call has the id and name
+            if tc_id:
+                state["current_tc_id"] = tc_id
+                return Div(
+                    Div(
+                        Span(f"🔧 {name}", cls="font-mono text-primary font-bold"),
+                        Pre(
+                            id=f"tc-args-{tc_id}",
+                            cls="whitespace-pre-wrap font-mono text-sm bg-base-300 p-2 rounded mt-1 overflow-x-auto",
+                        ),
+                        cls="py-2 px-3 my-2 bg-base-200 rounded-lg border border-base-300",
+                        id=f"tc-block-{tc_id}",
+                    ),
+                    id="chat-container",
+                    hx_swap_oob="beforeend",
+                    **{"hx-on::load": SCROLL_JS},
+                )
+            elif args_chunk and state.get("current_tc_id"):
+                return Span(
+                    args_chunk,
+                    id=f"tc-args-{state['current_tc_id']}",
+                    hx_swap_oob="beforeend",
+                )
 
     # ---- Message boundaries ----
 
@@ -276,12 +305,33 @@ def render_event(event, state):
     # ---- Tool execution ----
 
     elif t == "tool_execution_start":
-        return Div(
-            ToolExecutionBlock(event),
-            id="chat-container",
-            hx_swap_oob="beforeend",
-            **{"hx-on::load": SCROLL_JS},
-        )
+        tool_call_id = event.get("tool_call_id", "")
+        name = event.get("tool_name", "")
+        args = event.get("args", {})
+        args_str = json.dumps(args) if isinstance(args, dict) else str(args)
+
+        if state.get("current_tc_id") == tool_call_id:
+            # Already streamed — replace entire block with rendered version + spinner
+            return Div(
+                render_tool_call(name, args_str, tool_call_id),
+                Div(
+                    Span(cls="loading loading-spinner loading-xs"),
+                    Span("Running...", cls="ml-1 text-xs opacity-60"),
+                    cls="flex items-center mt-1",
+                    id=f"tool-status-{tool_call_id}",
+                ),
+                cls="py-2 px-3 my-2 bg-base-200 rounded-lg border border-base-300",
+                id=f"tc-block-{tool_call_id}",
+                hx_swap_oob="outerHTML",
+            )
+        else:
+            # No streaming happened — render full block
+            return Div(
+                ToolExecutionBlock(event),
+                id="chat-container",
+                hx_swap_oob="beforeend",
+                **{"hx-on::load": SCROLL_JS},
+            )
 
     elif t == "tool_execution_end":
         tool_call_id = event.get("tool_call_id", "")
