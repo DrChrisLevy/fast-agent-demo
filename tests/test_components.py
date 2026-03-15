@@ -489,7 +489,7 @@ class TestRenderEvent:
         assert 'id="tc-block-tc_500"' in html
         assert state["current_tc_id"] == "tc_500"
 
-    def test_tool_call_delta_subsequent_appends_args(self):
+    def test_tool_call_delta_first_chunk_replaces_spinner(self):
         state = make_render_state()
         state["current_tc_id"] = "tc_600"
         event = {
@@ -504,11 +504,21 @@ class TestRenderEvent:
                 ]
             },
         }
+        # First chunk removes spinner via outerHTML
         result = render_event(event, state)
         html = render(result)
         assert 'id="tc-args-tc_600"' in html
-        assert "beforeend" in html
+        assert "outerHTML" in html
         assert '{"query":' in html
+        # Second chunk appends via beforeend
+        event2 = {
+            "type": "message_update",
+            "delta_type": "tool_call_delta",
+            "delta": {"tool_calls": [{"id": "", "function": {"name": "", "arguments": " val"}}]},
+        }
+        result2 = render_event(event2, state)
+        html2 = render(result2)
+        assert "beforeend" in html2
 
     def test_message_start_increments_turn_counter(self):
         state = make_render_state()

@@ -180,49 +180,22 @@ async def agent_stream(req):
         try:
             while True:
                 event = await asyncio.wait_for(queue.get(), timeout=300)
-                etype = event.get("type", "?")
-                delta_type = event.get("delta_type", "")
-                extra = ""
-                if etype == "message_end":
-                    msg = event.get("message", {})
-                    extra = f" role={msg.get('role')} stop={msg.get('stop_reason')} content={str(msg.get('content', ''))[:60]}"
-                elif etype == "message_start":
-                    extra = f" role={event.get('message', {}).get('role')}"
-                elif etype == "tool_execution_start":
-                    extra = f" tool={event.get('tool_name')}"
-                elif etype == "tool_execution_end":
-                    extra = f" tool={event.get('tool_name')} error={event.get('is_error')}"
-                elif delta_type == "text_delta":
-                    extra = f" delta={repr(event.get('delta', {}).get('content', '')[:40])}"
-                elif delta_type == "thinking_delta":
-                    extra = f" delta={repr(event.get('delta', {}).get('reasoning_content', '')[:40])}"
-                print(f"[SSE] {etype}{f' ({delta_type})' if delta_type else ''}{extra} [turn={state['turn']}]")
-
                 html = render_event(event, state)
                 if html is not None:
                     yield sse_message(html, event="AgentEvent")
                     await asyncio.sleep(0.01)
-                else:
-                    print("[SSE]   -> no HTML rendered")
                 if event.get("type") == "agent_end":
-                    # Persist cumulative token total for this user
                     user_token_totals[user_id] = state["total_tokens"]
                     yield sse_message(Div(), event="close")
                     break
         except asyncio.TimeoutError:
-            print("[SSE] TIMEOUT")
             user_token_totals[user_id] = state["total_tokens"]
             yield sse_message(Div(), event="close")
-        except Exception as e:
-            print(f"[SSE] ERROR: {e}")
+        except Exception:
             user_token_totals[user_id] = state["total_tokens"]
-            import traceback
-
-            traceback.print_exc()
             yield sse_message(Div(), event="close")
         finally:
             unsub()
-            print("[SSE] stream ended")
 
     return EventStream(event_stream())
 

@@ -291,16 +291,21 @@ def render_event(event, state):
             name = tc.get("function", {}).get("name", "")
             args_chunk = tc.get("function", {}).get("arguments", "")
 
-            # First delta for a new tool call has the id and name
+            # First delta for a new tool call — show name + loading dots
             if tc_id:
                 state["current_tc_id"] = tc_id
                 state.setdefault("streamed_tc_ids", set()).add(tc_id)
                 return Div(
                     Div(
                         Span(f"🔧 {name}", cls="font-mono text-primary font-bold"),
+                        Div(
+                            Span(cls="loading loading-dots loading-xs"),
+                            id=f"tc-loading-{tc_id}",
+                            cls="mt-1",
+                        ),
                         Pre(
                             id=f"tc-args-{tc_id}",
-                            cls="whitespace-pre-wrap font-mono text-sm bg-base-300 p-2 rounded mt-1 overflow-x-auto",
+                            cls="whitespace-pre-wrap font-mono text-sm bg-base-300 p-2 rounded mt-1 overflow-x-auto hidden",
                         ),
                         cls="py-2 px-3 my-2 bg-base-200 rounded-lg border border-base-300",
                         id=f"tc-block-{tc_id}",
@@ -308,10 +313,23 @@ def render_event(event, state):
                     id="chat-container",
                     hx_swap_oob="beforeend",
                 )
+            # Subsequent deltas — stream args, hide spinner on first chunk
             elif args_chunk and state.get("current_tc_id"):
+                cur_id = state["current_tc_id"]
+                if not state.get(f"tc_args_started_{cur_id}"):
+                    state[f"tc_args_started_{cur_id}"] = True
+                    return Div(
+                        Div(id=f"tc-loading-{cur_id}", hx_swap_oob="outerHTML"),
+                        Pre(
+                            args_chunk,
+                            id=f"tc-args-{cur_id}",
+                            hx_swap_oob="outerHTML",
+                            cls="whitespace-pre-wrap font-mono text-sm bg-base-300 p-2 rounded mt-1 overflow-x-auto",
+                        ),
+                    )
                 return Span(
                     args_chunk,
-                    id=f"tc-args-{state['current_tc_id']}",
+                    id=f"tc-args-{cur_id}",
                     hx_swap_oob="beforeend",
                 )
 
