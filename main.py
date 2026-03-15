@@ -11,7 +11,7 @@ import uuid
 
 from dotenv import load_dotenv
 from fasthtml.common import *
-from agents.tools import get_agent, reset_agent, reset_sandbox, init_sandbox
+from agents.tools import get_agent, reset_agent, reset_sandbox, init_sandbox, user_token_totals
 from agents.ui.components import ChatMessage, ChatInput, TokenCountUpdate, render_event, make_render_state
 
 load_dotenv(dotenv_path="plash.env")
@@ -159,7 +159,7 @@ async def agent_stream(req):
     asyncio.create_task(agent.prompt(message))
 
     async def event_stream():
-        state = make_render_state()
+        state = make_render_state(initial_tokens=user_token_totals.get(user_id, 0))
         try:
             while True:
                 event = await asyncio.wait_for(queue.get(), timeout=300)
@@ -188,13 +188,17 @@ async def agent_stream(req):
                 else:
                     print("[SSE]   -> no HTML rendered")
                 if event.get("type") == "agent_end":
+                    # Persist cumulative token total for this user
+                    user_token_totals[user_id] = state["total_tokens"]
                     yield sse_message(Div(), event="close")
                     break
         except asyncio.TimeoutError:
             print("[SSE] TIMEOUT")
+            user_token_totals[user_id] = state["total_tokens"]
             yield sse_message(Div(), event="close")
         except Exception as e:
             print(f"[SSE] ERROR: {e}")
+            user_token_totals[user_id] = state["total_tokens"]
             import traceback
 
             traceback.print_exc()

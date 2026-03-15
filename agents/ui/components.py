@@ -188,9 +188,9 @@ SCROLL_JS = "let c = document.getElementById('scroll-container'); if(c) c.scroll
 _turn_counter = 0
 
 
-def make_render_state():
+def make_render_state(initial_tokens=0):
     """Create mutable state for render_event across a streaming session."""
-    return {"total_tokens": 0, "turn": _turn_counter}
+    return {"total_tokens": initial_tokens, "turn": _turn_counter}
 
 
 def render_event(event, state):

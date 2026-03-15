@@ -14,6 +14,7 @@ from agents.prompts import build_system_prompt
 # TTL caches for per-user isolation (30 min TTL matches Modal's idle timeout)
 user_agents: TTLCache[str, Agent] = TTLCache(maxsize=1000, ttl=1800)
 user_sandboxes: TTLCache[str, ModalSandbox] = TTLCache(maxsize=1000, ttl=1800)
+user_token_totals: TTLCache[str, int] = TTLCache(maxsize=1000, ttl=1800)
 _sandbox_lock = threading.Lock()
 
 # Init script to download data/files or define functions etc..
@@ -125,3 +126,4 @@ def reset_agent(user_id: str) -> None:
         agent = user_agents[user_id]
         agent.reset()
         del user_agents[user_id]
+    user_token_totals.pop(user_id, None)
