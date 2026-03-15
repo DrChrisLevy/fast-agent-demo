@@ -22,7 +22,6 @@ fastuuid==0.14.0
 filelock==3.20.3
 frozenlist==1.8.0
 fsspec==2026.1.0
-grpcio==1.76.0
 grpclib==0.4.9
 h11==0.16.0
 h2==4.3.0
@@ -40,7 +39,8 @@ jinja2==3.1.6
 jiter==0.12.0
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
-litellm==1.80.15
+liteagent @ git+https://github.com/DrChrisLevy/liteagent.git@2a7c20fff27e46334fb99fc7f43716452ce68180
+litellm==1.82.2
 lxml==6.0.2
 markdown-it-py==4.0.0
 markupsafe==3.0.3
