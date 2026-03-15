@@ -137,6 +137,7 @@ Every liteagent event type now streams to the UI:
 5. **Fix token counter resetting on each prompt** — persist cumulative total in TTL cache across SSE sessions
 6. **Skip empty thinking elements** — lazy container creation on first thinking_delta
 7. **Rewrite test suite, add parallel tests, update docs** — 169 tests passing, pytest-xdist, opus/high thinking, README/AGENTS.md sync
+8. **Restore full Gemini image generation examples** — re-added extended examples (editing, compositing, 4K, grounded search, multi-turn) that were dropped during migration
 
 ---
 
