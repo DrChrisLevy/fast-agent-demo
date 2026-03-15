@@ -1,8 +1,8 @@
 # Agent Chat
 
-A hackable ChatGPT-like code interpreter for data analysis, code execution, and image generation. See chat, tool calls, and message traces in real-time.
+A hackable ChatGPT-like code interpreter for data analysis, code execution, and image generation. Real-time token streaming, inline tool execution, and steering/abort controls.
 
-Built with [FastHTML](https://fastht.ml/) + [DaisyUI](https://daisyui.com/) + [HTMX](https://htmx.org/) + [Modal](https://modal.com).
+Built with [liteagent](https://github.com/DrChrisLevy/liteagent) + [FastHTML](https://fastht.ml/) + [DaisyUI](https://daisyui.com/) + [HTMX](https://htmx.org/) + [Modal](https://modal.com).
 
 ## Features
 
@@ -15,7 +15,10 @@ Built with [FastHTML](https://fastht.ml/) + [DaisyUI](https://daisyui.com/) + [H
 - **Auto-captured PIL images** — Any PIL Image assigned to a variable is automatically captured and shown
 - **Data science ready** — pandas, numpy, scipy, scikit-learn, matplotlib, seaborn, plotly, and more pre-installed; install any package with `pip`
 - **Per-user isolation** — Each browser session gets its own sandbox, which spins up on page load; refreshing resets to a fresh sandbox and terminates the old one
-- **Multi-provider LLM** — Uses [LiteLLM](https://docs.litellm.ai/) for easy model switching
+- **Token-by-token streaming** — Response text, thinking, and tool call arguments stream in real-time via SSE
+- **Steering and abort** — Send follow-up messages while the agent is running to steer it, or stop it mid-run
+- **Extended thinking** — See the model's reasoning process inline (when supported)
+- **Multi-provider LLM** — Uses [liteagent](https://github.com/DrChrisLevy/liteagent) + [LiteLLM](https://docs.litellm.ai/) for easy model switching
 
 ## Setup
 
@@ -37,7 +40,7 @@ MODAL_TOKEN_SECRET=
 FAST_APP_SECRET=
 
 # LLM API keys — only add the one you plan to use
-# Currently hardcoded to Claude Opus in agents/agent.py (change the model= line to switch)
+# Model is set in agents/tools.py get_agent() — change the model= line to switch
 ANTHROPIC_API_KEY=   # For Claude models
 OPENAI_API_KEY=      # For GPT models (optional)
 GOOGLE_API_KEY=      # For Gemini models and image generation (optional)
@@ -59,7 +62,7 @@ uv run python main.py
 ./dev test -m ""
 
 # Run tests with coverage
-./dev test --cov=agents --cov=main --cov-report=term-missing
+./dev test -m "" --cov=agents --cov=main --cov-report=term-missing
 
 # Lint and format
 ./dev lint
@@ -69,17 +72,16 @@ uv run python main.py
 
 ```
 agents/
-  agent.py           # Agentic loop (think → act → observe → repeat)
-  tools.py           # Tool definitions and implementations
+  tools.py           # Per-user Agent management, tool factory, sandbox lifecycle
   prompts.py         # System prompt generation
   coding_sandbox.py  # Modal sandbox wrapper for code execution
   driver_program.py  # Runs inside Modal sandbox, executes code
   ui/
-    components.py    # Chat, trace, input components
+    components.py    # Single-stream UI components and SSE event renderer
     markdown.py      # Markdown rendering with syntax highlighting
     tool_renderers.py # Custom tool call display
 tests/               # pytest tests
-main.py              # FastHTML app and routes
+main.py              # FastHTML app, routes, and SSE bridge
 ```
 
 ## Export requirements.txt
@@ -96,4 +98,6 @@ uv run plash deploy
 
 ## TODO
 
-- **Persistent storage** — Currently uses in-memory caches; [fastlite](https://github.com/AnswerDotAI/fastlite) would be a good option for database storage if needed
+- **Persistent storage** — Currently uses in-memory TTL caches; [fastlite](https://github.com/AnswerDotAI/fastlite) would be a good option for database storage if needed
+- **Style/UX polish** — Collapsible thinking display, tool block styling, dark theme
+- **Tool call streaming polish** — Show just the code value during streaming, not raw JSON wrapper

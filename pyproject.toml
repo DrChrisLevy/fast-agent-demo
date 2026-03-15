@@ -21,6 +21,7 @@ dev = [
     "plash-cli>=0.3.12",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.14.11",
 ]
 

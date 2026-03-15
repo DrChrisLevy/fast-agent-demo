@@ -3,11 +3,12 @@
 from fasthtml.common import to_xml
 from agents.ui.components import (
     ChatMessage,
-    TraceMessage,
-    TraceView,
     ChatInput,
-    ThinkingIndicator,
-    TraceUpdate,
+    TokenCountUpdate,
+    ToolExecutionBlock,
+    ToolResultBlock,
+    make_render_state,
+    render_event,
 )
 
 
@@ -16,184 +17,52 @@ def render(component):
     return to_xml(component)
 
 
+# ============ ChatMessage ============
+
+
 class TestChatMessage:
     """Tests for ChatMessage component."""
 
-    def test_user_message_has_chat_end(self):
+    def test_user_message_has_you_header(self):
         html = render(ChatMessage("user", "Hello"))
-        assert "chat-end" in html
-        assert "chat-bubble-primary" in html
+        assert "You" in html
 
-    def test_assistant_message_has_chat_start(self):
+    def test_assistant_message_has_assistant_header(self):
         html = render(ChatMessage("assistant", "Hi there"))
-        assert "chat-start" in html
-        assert "chat-bubble-primary" not in html
+        assert "Assistant" in html
 
-    def test_renders_content(self):
+    def test_assistant_message_has_prose_class(self):
+        html = render(ChatMessage("assistant", "Hi there"))
+        assert "prose" in html
+
+    def test_user_message_does_not_have_prose_class(self):
+        html = render(ChatMessage("user", "Hello"))
+        assert "prose" not in html
+
+    def test_renders_user_content(self):
         html = render(ChatMessage("user", "Test message"))
         assert "Test message" in html
 
-    def test_shows_role_header(self):
+    def test_renders_assistant_content(self):
+        html = render(ChatMessage("assistant", "Response text"))
+        assert "Response text" in html
+
+    def test_user_message_has_border(self):
         html = render(ChatMessage("user", "Hello"))
-        assert "User" in html
+        assert "border-b" in html
 
-    def test_has_unique_id(self):
-        html = render(ChatMessage("user", "Hello"))
-        assert 'id="msg-' in html
-
-
-class TestTraceMessage:
-    """Tests for TraceMessage component."""
-
-    def test_system_message_badge(self):
-        msg = {"role": "system", "content": "You are helpful"}
-        html = render(TraceMessage(msg))
-        assert "SYSTEM" in html
-        assert "badge-warning" in html
-
-    def test_user_message_badge(self):
-        msg = {"role": "user", "content": "Hello"}
-        html = render(TraceMessage(msg))
-        assert "USER" in html
-        assert "badge-primary" in html
-
-    def test_assistant_message_badge(self):
-        msg = {"role": "assistant", "content": "Hi"}
-        html = render(TraceMessage(msg))
-        assert "ASSISTANT" in html
-        assert "badge-secondary" in html
-
-    def test_tool_message_badge(self):
-        msg = {"role": "tool", "tool_call_id": "123", "content": "result"}
-        html = render(TraceMessage(msg))
-        assert "TOOL" in html
-        assert "badge-accent" in html
-        assert "tool_call_id: 123" in html
-
-    def test_tool_message_with_image_content_blocks(self):
-        """Tool results with image content blocks should render images."""
-        msg = {
-            "role": "tool",
-            "tool_call_id": "call_456",
-            "content": [
-                {"type": "text", "text": "Plot created"},
-                {"type": "image_url", "image_url": "data:image/png;base64,ABC123"},
-            ],
-        }
-        html = render(TraceMessage(msg))
-        assert "TOOL" in html
-        assert "Plot created" in html
-        assert "<img" in html
-        assert "data:image/png;base64,ABC123" in html
-
-    def test_tool_message_with_text_only_content_blocks(self):
-        """Tool results with only text content blocks should render text."""
-        msg = {
-            "role": "tool",
-            "tool_call_id": "call_789",
-            "content": [
-                {"type": "text", "text": "stdout:\nHello World"},
-            ],
-        }
-        html = render(TraceMessage(msg))
-        assert "Hello World" in html
-        assert "<img" not in html
-
-    def test_tool_message_with_multiple_images(self):
-        """Tool results with multiple images should render all of them."""
-        msg = {
-            "role": "tool",
-            "tool_call_id": "call_multi",
-            "content": [
-                {"type": "text", "text": "Two plots"},
-                {"type": "image_url", "image_url": "data:image/png;base64,IMG1"},
-                {"type": "image_url", "image_url": "data:image/png;base64,IMG2"},
-            ],
-        }
-        html = render(TraceMessage(msg))
-        # Each image has a thumbnail and a modal image (2 images * 2 = 4 img tags)
-        assert html.count("<img") == 4
-        assert "IMG1" in html
-        assert "IMG2" in html
-
-    def test_tool_message_with_plotly_html(self):
-        """Tool results with plotly_html content blocks should render iframes."""
-        msg = {
-            "role": "tool",
-            "tool_call_id": "call_plotly",
-            "content": [
-                {"type": "text", "text": "(no output)"},
-                {"type": "plotly_html", "html": "<div id='plotly-chart'>chart</div>"},
-            ],
-        }
-        html = render(TraceMessage(msg))
-        assert "TOOL" in html
-        assert "<iframe" in html
-        assert "plotly-chart" in html
-
-    def test_tool_message_with_multiple_plotly_charts(self):
-        """Tool results with multiple plotly charts should render all of them."""
-        msg = {
-            "role": "tool",
-            "tool_call_id": "call_multi_plotly",
-            "content": [
-                {"type": "plotly_html", "html": "<div>chart1</div>"},
-                {"type": "plotly_html", "html": "<div>chart2</div>"},
-            ],
-        }
-        html = render(TraceMessage(msg))
-        assert html.count("<iframe") == 2
-        assert "chart1" in html
-        assert "chart2" in html
-
-    def test_tool_message_with_mixed_images_and_plotly(self):
-        """Tool results with both images and plotly should render both."""
-        msg = {
-            "role": "tool",
-            "tool_call_id": "call_mixed",
-            "content": [
-                {"type": "text", "text": "Mixed output"},
-                {"type": "image_url", "image_url": "data:image/png;base64,IMG1"},
-                {"type": "plotly_html", "html": "<div>interactive</div>"},
-            ],
-        }
-        html = render(TraceMessage(msg))
-        assert "<img" in html
-        assert "<iframe" in html
-
-    def test_assistant_with_tool_calls(self, sample_tool_call_message):
-        html = render(TraceMessage(sample_tool_call_message))
-        assert "run_code" in html
-        assert "call_123" in html
-
-    def test_unknown_role_uses_ghost_badge(self):
-        msg = {"role": "custom", "content": "test"}
-        html = render(TraceMessage(msg))
-        assert "badge-ghost" in html
+    def test_assistant_message_has_border(self):
+        html = render(ChatMessage("assistant", "Hello"))
+        assert "border-b" in html
 
 
-class TestTraceView:
-    """Tests for TraceView component."""
-
-    def test_empty_messages_shows_placeholder(self):
-        html = render(TraceView([]))
-        assert "No messages yet" in html
-
-    def test_renders_all_messages(self, sample_messages):
-        html = render(TraceView(sample_messages))
-        assert "SYSTEM" in html
-        assert "USER" in html
-        assert "ASSISTANT" in html
-
-    def test_none_messages_shows_placeholder(self):
-        html = render(TraceView(None))
-        assert "No messages yet" in html
+# ============ ChatInput ============
 
 
 class TestChatInput:
     """Tests for ChatInput component."""
 
-    def test_has_textarea(self):
+    def test_has_textarea_with_message_name(self):
         html = render(ChatInput())
         assert "<textarea" in html
         assert 'name="message"' in html
@@ -203,34 +72,449 @@ class TestChatInput:
         assert "Send" in html
         assert "btn-primary" in html
 
-    def test_has_htmx_attributes(self):
+    def test_has_htmx_post_chat(self):
         html = render(ChatInput())
         assert 'hx-post="/chat"' in html
 
     def test_has_keyboard_shortcut_trigger(self):
         html = render(ChatInput())
-        assert "metaKey" in html or "ctrlKey" in html
+        assert "metaKey" in html
+        assert "ctrlKey" in html
+
+    def test_has_autofocus(self):
+        html = render(ChatInput())
+        assert "autofocus" in html
+
+    def test_disables_elements_during_request(self):
+        html = render(ChatInput())
+        assert "hx-disabled-elt" in html
+        assert "send-btn" in html
+        assert "message-input" in html
 
 
-class TestThinkingIndicator:
-    """Tests for ThinkingIndicator component."""
-
-    def test_has_loading_spinner(self):
-        html = render(ThinkingIndicator())
-        assert "loading" in html
-
-    def test_has_thinking_text(self):
-        html = render(ThinkingIndicator())
-        assert "thinking" in html.lower()
+# ============ TokenCountUpdate ============
 
 
-class TestTraceUpdate:
-    """Tests for TraceUpdate component."""
+class TestTokenCountUpdate:
+    """Tests for TokenCountUpdate component."""
 
-    def test_has_oob_swap(self, sample_messages):
-        html = render(TraceUpdate(sample_messages))
+    def test_renders_formatted_token_count(self):
+        html = render(TokenCountUpdate(1234))
+        assert "1,234 tokens" in html
+
+    def test_large_number_formatting(self):
+        html = render(TokenCountUpdate(1000000))
+        assert "1,000,000 tokens" in html
+
+    def test_has_oob_swap_attribute(self):
+        html = render(TokenCountUpdate(100))
         assert 'hx-swap-oob="true"' in html
 
-    def test_has_trace_container_id(self, sample_messages):
-        html = render(TraceUpdate(sample_messages))
-        assert 'id="trace-container"' in html
+    def test_has_correct_id(self):
+        html = render(TokenCountUpdate(100))
+        assert 'id="token-count"' in html
+
+    def test_zero_tokens(self):
+        html = render(TokenCountUpdate(0))
+        assert "0 tokens" in html
+
+
+# ============ ToolExecutionBlock ============
+
+
+class TestToolExecutionBlock:
+    """Tests for ToolExecutionBlock component."""
+
+    def test_renders_tool_name(self):
+        event = {"tool_name": "run_code", "args": {"code": "print(1)"}, "tool_call_id": "tc_1"}
+        html = render(ToolExecutionBlock(event))
+        assert "run_code" in html
+
+    def test_shows_running_spinner(self):
+        event = {"tool_name": "search", "args": {}, "tool_call_id": "tc_2"}
+        html = render(ToolExecutionBlock(event))
+        assert "loading-spinner" in html
+        assert "Running..." in html
+
+    def test_has_correct_id_based_on_tool_call_id(self):
+        event = {"tool_name": "search", "args": {}, "tool_call_id": "tc_abc"}
+        html = render(ToolExecutionBlock(event))
+        assert 'id="tool-block-tc_abc"' in html
+
+    def test_has_tool_status_id(self):
+        event = {"tool_name": "search", "args": {}, "tool_call_id": "tc_xyz"}
+        html = render(ToolExecutionBlock(event))
+        assert 'id="tool-status-tc_xyz"' in html
+
+    def test_renders_args_dict(self):
+        event = {"tool_name": "search", "args": {"query": "hello"}, "tool_call_id": "tc_3"}
+        html = render(ToolExecutionBlock(event))
+        assert "hello" in html
+
+
+# ============ ToolResultBlock ============
+
+
+class TestToolResultBlock:
+    """Tests for ToolResultBlock component."""
+
+    def test_renders_text_content(self):
+        event = {
+            "tool_call_id": "tc_1",
+            "result": {"content": [{"type": "text", "text": "stdout:\n42"}]},
+        }
+        html = render(ToolResultBlock(event))
+        assert "42" in html
+
+    def test_skips_no_output_text(self):
+        event = {
+            "tool_call_id": "tc_2",
+            "result": {"content": [{"type": "text", "text": "(no output)"}]},
+        }
+        html = render(ToolResultBlock(event))
+        # Should not render a Pre block with the text, but shows the placeholder span
+        assert "<pre" not in html.lower() or "(no output)" not in html.split("<pre")[0]
+        # The fallback span should show
+        assert "no output" in html
+
+    def test_renders_images_with_modal(self):
+        event = {
+            "tool_call_id": "tc_3",
+            "result": {"content": [{"type": "image_url", "image_url": "data:image/png;base64,ABC123"}]},
+        }
+        html = render(ToolResultBlock(event))
+        assert "<img" in html
+        assert "data:image/png;base64,ABC123" in html
+        assert "modal" in html
+
+    def test_renders_multiple_images(self):
+        event = {
+            "tool_call_id": "tc_4",
+            "result": {
+                "content": [
+                    {"type": "image_url", "image_url": "data:image/png;base64,IMG1"},
+                    {"type": "image_url", "image_url": "data:image/png;base64,IMG2"},
+                ]
+            },
+        }
+        html = render(ToolResultBlock(event))
+        assert "IMG1" in html
+        assert "IMG2" in html
+
+    def test_renders_plotly_iframes_from_details(self):
+        event = {
+            "tool_call_id": "tc_5",
+            "result": {
+                "content": [{"type": "text", "text": "(no output)"}],
+                "details": {"plotly_htmls": ["<div>chart1</div>"]},
+            },
+        }
+        html = render(ToolResultBlock(event))
+        assert "<iframe" in html
+        assert "chart1" in html
+
+    def test_renders_multiple_plotly_charts(self):
+        event = {
+            "tool_call_id": "tc_6",
+            "result": {
+                "content": [],
+                "details": {"plotly_htmls": ["<div>chart1</div>", "<div>chart2</div>"]},
+            },
+        }
+        html = render(ToolResultBlock(event))
+        assert html.count("<iframe") == 2
+
+    def test_error_styling_when_is_error(self):
+        event = {
+            "tool_call_id": "tc_7",
+            "result": {"content": [{"type": "text", "text": "Error: something broke"}]},
+            "is_error": True,
+        }
+        html = render(ToolResultBlock(event))
+        assert "text-error" in html
+
+    def test_no_error_styling_when_not_error(self):
+        event = {
+            "tool_call_id": "tc_8",
+            "result": {"content": [{"type": "text", "text": "Success"}]},
+            "is_error": False,
+        }
+        html = render(ToolResultBlock(event))
+        assert "text-error" not in html
+
+    def test_clears_spinner_for_tool(self):
+        event = {
+            "tool_call_id": "tc_9",
+            "result": {"content": []},
+        }
+        html = render(ToolResultBlock(event))
+        assert 'id="tool-status-tc_9"' in html
+        assert "hx-swap-oob" in html
+
+    def test_empty_content_shows_no_output_placeholder(self):
+        event = {
+            "tool_call_id": "tc_10",
+            "result": {"content": []},
+        }
+        html = render(ToolResultBlock(event))
+        assert "(no output)" in html
+
+
+# ============ make_render_state ============
+
+
+class TestMakeRenderState:
+    """Tests for make_render_state."""
+
+    def test_default_initial_tokens_is_zero(self):
+        state = make_render_state()
+        assert state["total_tokens"] == 0
+
+    def test_accepts_initial_tokens_param(self):
+        state = make_render_state(initial_tokens=500)
+        assert state["total_tokens"] == 500
+
+    def test_has_turn_key(self):
+        state = make_render_state()
+        assert "turn" in state
+
+
+# ============ render_event ============
+
+
+class TestRenderEvent:
+    """Tests for render_event."""
+
+    def test_text_delta_appends_to_streaming_text(self):
+        state = make_render_state()
+        event = {
+            "type": "message_update",
+            "delta_type": "text_delta",
+            "delta": {"content": "hello"},
+        }
+        result = render_event(event, state)
+        html = render(result)
+        assert 'id="streaming-text"' in html
+        assert "beforeend" in html
+        assert "hello" in html
+
+    def test_text_delta_empty_returns_none(self):
+        state = make_render_state()
+        event = {
+            "type": "message_update",
+            "delta_type": "text_delta",
+            "delta": {"content": ""},
+        }
+        result = render_event(event, state)
+        assert result is None
+
+    def test_thinking_delta_creates_container_lazily(self):
+        state = make_render_state()
+        state["thinking_created"] = False
+        event = {
+            "type": "message_update",
+            "delta_type": "thinking_delta",
+            "delta": {"reasoning_content": "Let me think..."},
+        }
+        result = render_event(event, state)
+        html = render(result)
+        assert 'id="chat-container"' in html
+        assert "Let me think..." in html
+        assert state["thinking_created"] is True
+
+    def test_thinking_delta_subsequent_appends(self):
+        state = make_render_state()
+        state["thinking_created"] = True
+        turn = state["turn"]
+        event = {
+            "type": "message_update",
+            "delta_type": "thinking_delta",
+            "delta": {"reasoning_content": "more thinking"},
+        }
+        result = render_event(event, state)
+        html = render(result)
+        assert f'id="thinking-{turn}"' in html
+        assert "beforeend" in html
+        assert "more thinking" in html
+
+    def test_message_end_final_renders_chat_message_and_clears_streaming(self):
+        state = make_render_state()
+        event = {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "content": "Final answer",
+                "stop_reason": "end_turn",
+                "usage": {"total_tokens": 100},
+            },
+        }
+        result = render_event(event, state)
+        html = render(result)
+        assert "Assistant" in html
+        assert "Final answer" in html
+        # Should clear streaming-text
+        assert 'id="streaming-text"' in html
+        assert "innerHTML" in html
+
+    def test_message_end_accumulates_tokens_from_usage(self):
+        state = make_render_state(initial_tokens=200)
+        event = {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "content": "Done",
+                "stop_reason": "end_turn",
+                "usage": {"total_tokens": 150},
+            },
+        }
+        render_event(event, state)
+        assert state["total_tokens"] == 350
+
+    def test_message_end_tool_calls_clears_streaming(self):
+        state = make_render_state()
+        event = {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "content": "",
+                "stop_reason": "tool_calls",
+                "usage": {"total_tokens": 50},
+            },
+        }
+        result = render_event(event, state)
+        html = render(result)
+        assert 'id="streaming-text"' in html
+        assert "innerHTML" in html
+
+    def test_tool_execution_start_renders_tool_block_no_streaming(self):
+        state = make_render_state()
+        event = {
+            "type": "tool_execution_start",
+            "tool_call_id": "tc_100",
+            "tool_name": "run_code",
+            "args": {"code": "print(1)"},
+        }
+        result = render_event(event, state)
+        html = render(result)
+        assert "run_code" in html
+        assert 'id="chat-container"' in html
+        assert "beforeend" in html
+
+    def test_tool_execution_start_replaces_streamed_block(self):
+        state = make_render_state()
+        state["current_tc_id"] = "tc_200"
+        event = {
+            "type": "tool_execution_start",
+            "tool_call_id": "tc_200",
+            "tool_name": "run_code",
+            "args": {"code": "x = 1"},
+        }
+        result = render_event(event, state)
+        html = render(result)
+        assert "run_code" in html
+        assert "Running..." in html
+        assert 'hx-swap-oob="outerHTML"' in html
+        assert 'id="tc-block-tc_200"' in html
+
+    def test_tool_execution_end_renders_result(self):
+        state = make_render_state()
+        event = {
+            "type": "tool_execution_end",
+            "tool_call_id": "tc_300",
+            "result": {"content": [{"type": "text", "text": "output here"}]},
+        }
+        result = render_event(event, state)
+        html = render(result)
+        assert "output here" in html
+        assert 'id="chat-container"' in html
+
+    def test_tool_execution_end_clears_spinner(self):
+        state = make_render_state()
+        event = {
+            "type": "tool_execution_end",
+            "tool_call_id": "tc_400",
+            "result": {"content": []},
+        }
+        result = render_event(event, state)
+        html = render(result)
+        assert 'id="tool-status-tc_400"' in html
+        assert "hx-swap-oob" in html
+
+    def test_agent_end_hides_stop_button(self):
+        state = make_render_state()
+        event = {"type": "agent_end"}
+        result = render_event(event, state)
+        html = render(result)
+        assert 'id="stop-btn"' in html
+        assert "hidden" in html
+
+    def test_agent_end_clears_streaming_text(self):
+        state = make_render_state()
+        event = {"type": "agent_end"}
+        result = render_event(event, state)
+        html = render(result)
+        assert 'id="streaming-text"' in html
+        assert "innerHTML" in html
+
+    def test_returns_none_for_unhandled_events(self):
+        state = make_render_state()
+        event = {"type": "some_unknown_event"}
+        result = render_event(event, state)
+        assert result is None
+
+    def test_returns_none_for_empty_event(self):
+        state = make_render_state()
+        result = render_event({}, state)
+        assert result is None
+
+    def test_tool_call_delta_first_creates_block(self):
+        state = make_render_state()
+        event = {
+            "type": "message_update",
+            "delta_type": "tool_call_delta",
+            "delta": {
+                "tool_calls": [
+                    {
+                        "id": "tc_500",
+                        "function": {"name": "search", "arguments": ""},
+                    }
+                ]
+            },
+        }
+        result = render_event(event, state)
+        html = render(result)
+        assert "search" in html
+        assert 'id="tc-block-tc_500"' in html
+        assert state["current_tc_id"] == "tc_500"
+
+    def test_tool_call_delta_subsequent_appends_args(self):
+        state = make_render_state()
+        state["current_tc_id"] = "tc_600"
+        event = {
+            "type": "message_update",
+            "delta_type": "tool_call_delta",
+            "delta": {
+                "tool_calls": [
+                    {
+                        "id": "",
+                        "function": {"name": "", "arguments": '{"query":'},
+                    }
+                ]
+            },
+        }
+        result = render_event(event, state)
+        html = render(result)
+        assert 'id="tc-args-tc_600"' in html
+        assert "beforeend" in html
+        assert '{"query":' in html
+
+    def test_message_start_increments_turn_counter(self):
+        state = make_render_state()
+        initial_turn = state["turn"]
+        event = {
+            "type": "message_start",
+            "message": {"role": "assistant"},
+        }
+        render_event(event, state)
+        assert state["turn"] > initial_turn
+        assert state.get("thinking_created") is False

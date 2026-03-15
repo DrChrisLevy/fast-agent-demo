@@ -111,11 +111,11 @@ def get_agent(user_id: str) -> Agent:
     """Get or create the Agent for a user."""
     if user_id not in user_agents:
         agent = Agent(
-            model="anthropic/claude-sonnet-4-6",
+            model="anthropic/claude-opus-4-6",
             tools=[make_run_code_tool(user_id)],
             system_prompt=build_system_prompt(),
         )
-        agent.set_thinking_level("medium")
+        agent.set_thinking_level("high")
         user_agents[user_id] = agent
     return user_agents[user_id]
 

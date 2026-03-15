@@ -30,9 +30,9 @@ case "$cmd" in
     done
 
     if [ "$has_mark" -eq 1 ]; then
-      uv run pytest tests "$@"
+      uv run pytest tests -n auto "$@"
     else
-      uv run pytest tests -m "not slow" "$@"
+      uv run pytest tests -n auto -m "not slow" "$@"
     fi
     ;;
   lint)
