@@ -14,7 +14,7 @@ Built with [liteagent](https://github.com/DrChrisLevy/liteagent) + [FastHTML](ht
 - **Gemini image generation** — Generate and edit images using Google's Gemini API directly in code
 - **Auto-captured PIL images** — Any PIL Image assigned to a variable is automatically captured and shown
 - **Data science ready** — pandas, numpy, scipy, scikit-learn, matplotlib, seaborn, plotly, and more pre-installed; install any package with `pip`
-- **Per-user isolation** — Each browser session gets its own sandbox, which spins up on page load; refreshing resets to a fresh sandbox and terminates the old one
+- **Per-user isolation** — Each browser session gets its own sandbox; conversation and state persist across page refreshes and new tabs
 - **Token-by-token streaming** — Response text, thinking, and tool call arguments stream in real-time via SSE
 - **Steering and abort** — Send follow-up messages while the agent is running to steer it, or stop it mid-run
 - **Extended thinking** — See the model's reasoning process inline (when supported)
@@ -98,6 +98,7 @@ uv run plash deploy
 
 ## TODO
 
-- **Persistent storage** — Currently uses in-memory TTL caches; [fastlite](https://github.com/AnswerDotAI/fastlite) would be a good option for database storage if needed
+- **Persistent storage** — Currently uses in-memory TTL caches (30 min TTL); [fastlite](https://github.com/AnswerDotAI/fastlite) would be a good option for database storage if needed
 - **Style/UX polish** — Collapsible thinking display, tool block styling, dark theme
 - **Tool call streaming polish** — Show just the code value during streaming, not raw JSON wrapper
+- **End-to-end tests** — Playwright + mocked agent for automated UI testing
