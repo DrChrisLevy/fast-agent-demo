@@ -231,9 +231,6 @@ def ToolResultBlock(event):
 
 # ============ Event Renderer ============
 
-# Auto-scroll JS — keeps view pinned to bottom during streaming
-SCROLL_JS = "let c = document.getElementById('scroll-container'); if(c) c.scrollTop = c.scrollHeight;"
-
 
 _turn_counter = 0
 
@@ -262,7 +259,6 @@ def render_event(event, state):
                 id="streaming-text",
                 hx_swap_oob="beforeend",
                 cls="whitespace-pre-wrap font-sans text-base leading-relaxed m-0 px-0",
-                **{"hx-on::load": SCROLL_JS},
             )
 
     elif t == "message_update" and delta_type == "thinking_delta":
@@ -279,13 +275,11 @@ def render_event(event, state):
                     ),
                     id="chat-container",
                     hx_swap_oob="beforeend",
-                    **{"hx-on::load": SCROLL_JS},
                 )
             return Span(
                 delta_text,
                 id=f"thinking-{turn}",
                 hx_swap_oob="beforeend",
-                **{"hx-on::load": SCROLL_JS},
             )
 
     elif t == "message_update" and delta_type == "tool_call_delta":
@@ -313,7 +307,6 @@ def render_event(event, state):
                     ),
                     id="chat-container",
                     hx_swap_oob="beforeend",
-                    **{"hx-on::load": SCROLL_JS},
                 )
             elif args_chunk and state.get("current_tc_id"):
                 return Span(
@@ -346,7 +339,6 @@ def render_event(event, state):
                     ChatMessage("assistant", msg["content"]),
                     id="chat-container",
                     hx_swap_oob="beforeend",
-                    **{"hx-on::load": SCROLL_JS},
                 ),
                 Span(id="streaming-text", hx_swap_oob="innerHTML"),
                 TokenCountUpdate(state["total_tokens"]),
@@ -389,13 +381,12 @@ def render_event(event, state):
                 ToolExecutionBlock(event),
                 id="chat-container",
                 hx_swap_oob="beforeend",
-                **{"hx-on::load": SCROLL_JS},
             )
 
     elif t == "tool_execution_end":
         tool_call_id = event.get("tool_call_id", "")
         return Div(
-            Div(ToolResultBlock(event), id="chat-container", hx_swap_oob="beforeend", **{"hx-on::load": SCROLL_JS}),
+            Div(ToolResultBlock(event), id="chat-container", hx_swap_oob="beforeend"),
             Div(id=f"tool-status-{tool_call_id}", hx_swap_oob="innerHTML"),
         )
 

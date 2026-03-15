@@ -93,7 +93,7 @@ uv export --no-hashes --no-dev -o requirements.txt
 ## Deploy to [Plash](https://pla.sh/)
 
 ```bash
-uv run plash deploy
+uv run plash_deploy
 ```
 
 ## TODO

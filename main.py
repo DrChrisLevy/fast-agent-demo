@@ -39,6 +39,23 @@ hdrs = (
     Script(src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"),
     Script(src="https://unpkg.com/htmx-ext-sse@2.2.1/sse.js"),
     Style("html, body { height: 100%; overflow: hidden; margin: 0; }"),
+    Script("""
+    (function() {
+        var pinned = true;
+        var sc;
+        document.addEventListener('DOMContentLoaded', () => {
+            sc = document.getElementById('scroll-container');
+            if (!sc) return;
+            sc.addEventListener('scroll', () => {
+                pinned = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 150;
+            });
+        });
+        document.addEventListener('htmx:oobAfterSwap', () => {
+            if (!pinned || !sc) return;
+            requestAnimationFrame(() => { sc.scrollTop = sc.scrollHeight; });
+        });
+    })();
+    """),
 )
 app, rt = fast_app(
     before=beforeware,
