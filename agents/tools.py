@@ -94,7 +94,7 @@ def make_run_code_tool(user_id: str) -> Tool:
 
     return Tool(
         name="run_code",
-        description="Run Python code in a sandboxed environment",
+        description="Run any arbitrary python code in a secure and isolated sandbox environment",
         parameters={
             "type": "object",
             "properties": {"code": {"type": "string", "description": "Python code to run"}},

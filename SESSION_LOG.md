@@ -136,6 +136,7 @@ Every liteagent event type now streams to the UI:
 4. **Fix thinking ID collisions** — only increment counter in message_start
 5. **Fix token counter resetting on each prompt** — persist cumulative total in TTL cache across SSE sessions
 6. **Skip empty thinking elements** — lazy container creation on first thinking_delta
+7. **Rewrite test suite, add parallel tests, update docs** — 169 tests passing, pytest-xdist, opus/high thinking, README/AGENTS.md sync
 
 ---
 
@@ -155,6 +156,7 @@ Every liteagent event type now streams to the UI:
 - Clear/reset
 - Error handling (model self-corrects on tool errors)
 - Cumulative token counter across prompts
+- 169 tests passing (parallel via pytest-xdist)
 - Zero console errors
 
 ---
@@ -162,6 +164,5 @@ Every liteagent event type now streams to the UI:
 ## What's Next
 
 - **Style/UX polish** — thinking display (collapsible?), tool block styling, spacing, dark theme option
-- **Tests** — old test suite is broken, needs updating for liteagent
 - **Orphan sandbox cleanup** — server restarts leak Modal sandboxes (they idle-timeout after 30min but could be cleaned up better)
 - **Tool call streaming polish** — during streaming show just the code value, not raw JSON wrapper

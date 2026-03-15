@@ -54,6 +54,7 @@ from io import BytesIO
 
 client = genai.Client()
 
+# Basic generation
 response = client.models.generate_content(
     model="gemini-2.5-flash-image",
     contents="A cute robot painting a sunset",
@@ -67,6 +68,59 @@ for part in response.parts:
         print(part.text)
     elif part.inline_data:
         generated_image = Image.open(BytesIO(part.inline_data.data))
+
+# Edit an existing image (pass image + text prompt)
+input_image = Image.open("photo.jpg")
+response = client.models.generate_content(
+    model="gemini-2.5-flash-image",
+    contents=["Add a small wizard hat to this cat", input_image],
+)
+for part in response.parts:
+    if part.inline_data:
+        edited_image = Image.open(BytesIO(part.inline_data.data))
+
+# Combine multiple images (Pro supports up to 14)
+dress = Image.open("dress.jpg")
+model_photo = Image.open("model.jpg")
+response = client.models.generate_content(
+    model="gemini-3-pro-image-preview",
+    contents=["Put this dress on this person", dress, model_photo],
+)
+for part in response.parts:
+    if part.inline_data:
+        composite = Image.open(BytesIO(part.inline_data.data))
+
+# High-resolution output (Pro model generates up to 4K)
+# Resolution: "1K" (default), "2K", "4K" - MUST use uppercase 'K'
+# Aspect ratios: "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"
+response = client.models.generate_content(
+    model="gemini-3-pro-image-preview",
+    contents="A stunning landscape photograph",
+    config=types.GenerateContentConfig(
+        response_modalities=["TEXT", "IMAGE"],
+        image_config=types.ImageConfig(aspect_ratio="16:9", image_size="4K"),
+    ),
+)
+
+# Pro model with grounded web search (creates images using real-time info)
+chat = client.chats.create(
+    model="gemini-3-pro-image-preview",
+    config=types.GenerateContentConfig(
+        response_modalities=["TEXT", "IMAGE"],
+        image_config=types.ImageConfig(aspect_ratio="1:1", image_size="2K"),
+        tools=[{"google_search": {}}],  # Enable grounded search
+    ),
+)
+response = chat.send_message("Create an infographic about today's weather in NYC")
+for part in response.parts:
+    if part.inline_data:
+        weather_image = Image.open(BytesIO(part.inline_data.data))
+
+# Continue editing in same chat (multi-turn)
+response = chat.send_message("Now translate it to Spanish")
+for part in response.parts:
+    if part.inline_data:
+        spanish_image = Image.open(BytesIO(part.inline_data.data))
 ```
 """,
 }
