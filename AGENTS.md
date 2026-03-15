@@ -30,6 +30,8 @@ If you find yourself writing inline JS event handlers or `<script>` tags for int
 ## LLM
 This app uses [liteagent](https://github.com/DrChrisLevy/liteagent) for the agent loop, which uses https://docs.litellm.ai/docs/ under the hood for LLM calls. The model and thinking level are configured in `agents/tools.py` in `get_agent()`.
 
+The liteagent source code is located at `../liteagent`. When working with liteagent APIs (Agent, Tool, ToolResult, events, state, subscribe, etc.), read the source there to verify behavior rather than guessing.
+
 ## State Management
 All per-user state (agents, sandboxes, token totals) lives in in-memory TTL caches (30 min TTL). No database is used currently.
 
