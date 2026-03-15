@@ -218,6 +218,19 @@ def render_event(event, state):
     elif t == "message_update" and delta_type == "thinking_delta":
         delta_text = event.get("delta", {}).get("reasoning_content", "")
         if delta_text:
+            # Lazily create the thinking container on first delta
+            if not state.get("thinking_created"):
+                state["thinking_created"] = True
+                return Div(
+                    Pre(
+                        delta_text,
+                        id=f"thinking-{turn}",
+                        cls="whitespace-pre-wrap font-mono text-sm opacity-40 m-0 px-0 py-1",
+                    ),
+                    id="chat-container",
+                    hx_swap_oob="beforeend",
+                    **{"hx-on::load": SCROLL_JS},
+                )
             return Span(
                 delta_text,
                 id=f"thinking-{turn}",
@@ -266,11 +279,7 @@ def render_event(event, state):
             global _turn_counter
             _turn_counter += 1
             state["turn"] = _turn_counter
-            return Div(
-                Pre(id=f"thinking-{_turn_counter}", cls="whitespace-pre-wrap font-mono text-sm opacity-40 m-0 px-0 py-1"),
-                id="chat-container",
-                hx_swap_oob="beforeend",
-            )
+            state["thinking_created"] = False
 
     elif t == "message_end":
         msg = event.get("message", {})
