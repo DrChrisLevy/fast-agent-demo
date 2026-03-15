@@ -250,6 +250,7 @@ def render_event(event, state):
             # First delta for a new tool call has the id and name
             if tc_id:
                 state["current_tc_id"] = tc_id
+                state.setdefault("streamed_tc_ids", set()).add(tc_id)
                 return Div(
                     Div(
                         Span(f"🔧 {name}", cls="font-mono text-primary font-bold"),
@@ -318,7 +319,7 @@ def render_event(event, state):
         args = event.get("args", {})
         args_str = json.dumps(args) if isinstance(args, dict) else str(args)
 
-        if state.get("current_tc_id") == tool_call_id:
+        if tool_call_id in state.get("streamed_tc_ids", set()):
             # Already streamed — replace entire block with rendered version + spinner
             return Div(
                 render_tool_call(name, args_str, tool_call_id),

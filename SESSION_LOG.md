@@ -103,6 +103,11 @@ Every liteagent event type now streams to the UI:
 - **Cause:** `make_render_state()` hardcoded `total_tokens: 0`. Each SSE session (one per prompt) started fresh. liteagent emits per-call usage in `message_end` events (not cumulative), so the counter only ever showed tokens from the current prompt.
 - **Fix:** Added `user_token_totals` TTL cache in `tools.py` to persist the running total per user. `make_render_state()` now accepts `initial_tokens` param, seeded from the cache. The total is written back on `agent_end`, timeout, or error.
 
+### Multi-tool-call rendering — raw JSON not replaced for earlier tool calls
+- **Symptom:** When the model issued 3 parallel tool calls, the first two showed raw JSON args AND a rendered version below. Only the last one rendered correctly.
+- **Cause:** `state["current_tc_id"]` only tracked the last streamed tool call ID. When `tool_execution_start` fired for earlier tool calls, they didn't match, so they were appended as new blocks instead of replacing the streamed ones.
+- **Fix:** Changed to `state["streamed_tc_ids"]` (a set) to track all streamed tool call IDs. `tool_execution_start` checks set membership instead of equality.
+
 ### Empty thinking `<pre>` tags when model doesn't think
 - **Symptom:** Empty `<pre id="thinking-N">` elements left in the DOM between user message and assistant response on turns where the model didn't use extended thinking.
 - **Cause:** `message_start` eagerly created the thinking container for every assistant turn, regardless of whether thinking deltas followed.
@@ -138,6 +143,8 @@ Every liteagent event type now streams to the UI:
 6. **Skip empty thinking elements** — lazy container creation on first thinking_delta
 7. **Rewrite test suite, add parallel tests, update docs** — 169 tests passing, pytest-xdist, opus/high thinking, README/AGENTS.md sync
 8. **Restore full Gemini image generation examples** — re-added extended examples (editing, compositing, 4K, grounded search, multi-turn) that were dropped during migration
+9. **Update Gemini docs with Nano Banana 2** — all 3 models documented, extended aspect ratios, 512 resolution, thinking control, text rendering, image search grounding
+10. **Fix multi-tool-call rendering + pin google-genai SDK** — track streamed tool IDs in a set (not just last one), restore full SearchTypes syntax, pin google-genai>=1.67.0 in sandbox
 
 ---
 
@@ -157,6 +164,8 @@ Every liteagent event type now streams to the UI:
 - Clear/reset
 - Error handling (model self-corrects on tool errors)
 - Cumulative token counter across prompts
+- Multiple parallel tool calls render correctly (no duplicate raw JSON)
+- Gemini image generation with SearchTypes/ImageSearch grounding
 - 169 tests passing (parallel via pytest-xdist)
 - Zero console errors
 

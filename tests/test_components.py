@@ -403,6 +403,7 @@ class TestRenderEvent:
     def test_tool_execution_start_replaces_streamed_block(self):
         state = make_render_state()
         state["current_tc_id"] = "tc_200"
+        state["streamed_tc_ids"] = {"tc_200"}
         event = {
             "type": "tool_execution_start",
             "tool_call_id": "tc_200",
