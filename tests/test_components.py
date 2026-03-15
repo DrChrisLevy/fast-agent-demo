@@ -9,6 +9,7 @@ from agents.ui.components import (
     ToolResultBlock,
     make_render_state,
     render_event,
+    render_history,
 )
 
 
@@ -519,3 +520,208 @@ class TestRenderEvent:
         render_event(event, state)
         assert state["turn"] > initial_turn
         assert state.get("thinking_created") is False
+
+
+# ============ render_history ============
+
+
+class TestRenderHistory:
+    """Tests for render_history — renders agent message history on page load."""
+
+    def test_empty_messages_returns_empty_list(self):
+        assert render_history([]) == []
+
+    def test_user_message_string_content(self):
+        messages = [{"role": "user", "content": "Hello"}]
+        parts = render_history(messages)
+        assert len(parts) == 1
+        html = render(parts[0])
+        assert "You" in html
+        assert "Hello" in html
+
+    def test_user_message_list_content(self):
+        """User messages with multimodal content blocks should extract text."""
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Describe this"},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,ABC"}},
+                ],
+            }
+        ]
+        parts = render_history(messages)
+        assert len(parts) == 1
+        html = render(parts[0])
+        assert "Describe this" in html
+
+    def test_assistant_message_with_text(self):
+        messages = [{"role": "assistant", "content": "Here is your answer"}]
+        parts = render_history(messages)
+        assert len(parts) == 1
+        html = render(parts[0])
+        assert "Assistant" in html
+        assert "Here is your answer" in html
+
+    def test_assistant_message_with_reasoning(self):
+        messages = [{"role": "assistant", "content": "Answer", "reasoning_content": "Let me think about this"}]
+        parts = render_history(messages)
+        assert len(parts) == 2  # thinking + response
+        thinking_html = render(parts[0])
+        assert "Let me think about this" in thinking_html
+        assert "opacity-40" in thinking_html
+        response_html = render(parts[1])
+        assert "Answer" in response_html
+
+    def test_assistant_message_with_tool_calls(self):
+        messages = [
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{"id": "tc_1", "function": {"name": "run_code", "arguments": '{"code": "print(1)"}'}}],
+            }
+        ]
+        parts = render_history(messages)
+        assert len(parts) == 1
+        html = render(parts[0])
+        assert "run_code" in html
+        assert "tc_1" in html
+
+    def test_assistant_message_with_text_and_tool_calls(self):
+        """Assistant message with both text content and tool calls renders both."""
+        messages = [
+            {
+                "role": "assistant",
+                "content": "Let me run that",
+                "tool_calls": [{"id": "tc_1", "function": {"name": "run_code", "arguments": '{"code": "x=1"}'}}],
+            }
+        ]
+        parts = render_history(messages)
+        assert len(parts) == 2  # text + tool call
+        assert "Let me run that" in render(parts[0])
+        assert "run_code" in render(parts[1])
+
+    def test_tool_result_with_text(self):
+        messages = [
+            {
+                "role": "tool",
+                "tool_call_id": "tc_1",
+                "name": "run_code",
+                "content": [{"type": "text", "text": "stdout:\n42"}],
+                "is_error": False,
+            }
+        ]
+        parts = render_history(messages)
+        assert len(parts) == 1
+        html = render(parts[0])
+        assert "42" in html
+
+    def test_tool_result_with_error(self):
+        messages = [
+            {
+                "role": "tool",
+                "tool_call_id": "tc_1",
+                "name": "run_code",
+                "content": [{"type": "text", "text": "NameError: x not defined"}],
+                "is_error": True,
+            }
+        ]
+        parts = render_history(messages)
+        html = render(parts[0])
+        assert "text-error" in html
+
+    def test_tool_result_with_image(self):
+        messages = [
+            {
+                "role": "tool",
+                "tool_call_id": "tc_1",
+                "name": "run_code",
+                "content": [{"type": "image_url", "image_url": "data:image/png;base64,ABC123"}],
+                "is_error": False,
+            }
+        ]
+        parts = render_history(messages)
+        assert len(parts) == 1
+        html = render(parts[0])
+        assert "<img" in html
+        assert "ABC123" in html
+        assert "modal" in html
+
+    def test_tool_result_with_image_dict_format(self):
+        """Tool results in stored messages may have image_url as a dict with url key."""
+        messages = [
+            {
+                "role": "tool",
+                "tool_call_id": "tc_1",
+                "name": "run_code",
+                "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,XYZ"}}],
+                "is_error": False,
+            }
+        ]
+        parts = render_history(messages)
+        html = render(parts[0])
+        assert "<img" in html
+        assert "XYZ" in html
+
+    def test_tool_result_with_plotly(self):
+        messages = [
+            {
+                "role": "tool",
+                "tool_call_id": "tc_1",
+                "name": "run_code",
+                "content": [{"type": "text", "text": "(no output)"}],
+                "details": {"plotly_htmls": ["<div>my chart</div>"]},
+                "is_error": False,
+            }
+        ]
+        parts = render_history(messages)
+        assert len(parts) == 1
+        html = render(parts[0])
+        assert "<iframe" in html
+        assert "my chart" in html
+
+    def test_tool_result_no_output_skipped(self):
+        """Tool results with only '(no output)' text should not render."""
+        messages = [
+            {
+                "role": "tool",
+                "tool_call_id": "tc_1",
+                "name": "run_code",
+                "content": [{"type": "text", "text": "(no output)"}],
+                "is_error": False,
+            }
+        ]
+        parts = render_history(messages)
+        assert len(parts) == 0
+
+    def test_full_conversation(self):
+        """A realistic multi-turn conversation with tool use renders all parts."""
+        messages = [
+            {"role": "user", "content": "Plot a sine wave"},
+            {
+                "role": "assistant",
+                "content": None,
+                "reasoning_content": "I need to use matplotlib",
+                "tool_calls": [{"id": "tc_1", "function": {"name": "run_code", "arguments": '{"code": "import matplotlib"}'}}],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "tc_1",
+                "name": "run_code",
+                "content": [
+                    {"type": "text", "text": "stdout:\nok"},
+                    {"type": "image_url", "image_url": "data:image/png;base64,PLOT"},
+                ],
+                "is_error": False,
+            },
+            {"role": "assistant", "content": "Here is your sine wave plot!"},
+        ]
+        parts = render_history(messages)
+        # user + thinking + tool_call + tool_result + assistant
+        assert len(parts) == 5
+        full_html = "".join(render(p) for p in parts)
+        assert "Plot a sine wave" in full_html
+        assert "matplotlib" in full_html
+        assert "run_code" in full_html
+        assert "PLOT" in full_html
+        assert "sine wave plot" in full_html

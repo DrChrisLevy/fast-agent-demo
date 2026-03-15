@@ -13,6 +13,62 @@ from agents.ui.markdown import render_md
 from agents.ui.tool_renderers import render_tool_call
 
 
+# ============ Shared Helpers ============
+
+
+def _render_tool_result_parts(content, details, is_error):
+    """Render tool result content blocks (text, images, plotly). Used by both ToolResultBlock and render_history."""
+    parts = []
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "text":
+            text = block.get("text", "")
+            if text and text != "(no output)":
+                parts.append(
+                    Pre(
+                        text,
+                        cls=f"text-sm whitespace-pre-wrap bg-base-300 p-2 rounded max-h-48 overflow-y-auto {'text-error' if is_error else ''}",
+                    )
+                )
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "image_url":
+            img_url = block.get("image_url", "")
+            if isinstance(img_url, dict):
+                img_url = img_url.get("url", "")
+            modal_id = f"img-modal-{hash(img_url) % 100000}"
+            parts.append(
+                Div(
+                    Img(
+                        src=img_url,
+                        cls="max-w-md rounded-lg shadow-md cursor-pointer hover:opacity-90",
+                        onclick=f"document.getElementById('{modal_id}').showModal()",
+                    ),
+                    Dialog(
+                        Div(
+                            Img(src=img_url, cls="max-h-[80vh] max-w-full object-contain"),
+                            cls="modal-box w-fit max-w-[90vw] p-4 bg-base-300",
+                        ),
+                        Form(
+                            Button("", cls="cursor-default"),
+                            method="dialog",
+                            cls="modal-backdrop bg-neutral/80",
+                        ),
+                        id=modal_id,
+                        cls="modal modal-middle",
+                    ),
+                    cls="my-2",
+                )
+            )
+    if details and isinstance(details, dict) and details.get("plotly_htmls"):
+        for html in details["plotly_htmls"]:
+            parts.append(
+                Iframe(
+                    srcdoc=f"<!DOCTYPE html><html><head><style>body{{margin:0}}</style></head><body>{html}</body></html>",
+                    cls="w-full h-80 border-0 rounded bg-base-100 my-2",
+                )
+            )
+    return parts
+
+
 # ============ Chat Components ============
 
 
@@ -38,6 +94,48 @@ def ChatMessage(role: str, content: str):
             ),
             cls="border-b border-base-300",
         )
+
+
+def render_history(messages):
+    """Render agent message history for page load (refresh / new tab)."""
+    parts = []
+    for msg in messages:
+        role = msg.get("role")
+        if role == "user":
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                text = " ".join(b.get("text", "") for b in content if b.get("type") == "text")
+            else:
+                text = content
+            parts.append(ChatMessage("user", text))
+        elif role == "assistant":
+            # Thinking text
+            reasoning = msg.get("reasoning_content")
+            if reasoning:
+                parts.append(Pre(reasoning, cls="whitespace-pre-wrap font-mono text-sm opacity-40 m-0 px-0 py-1"))
+            # Text content
+            content = msg.get("content")
+            if content:
+                parts.append(ChatMessage("assistant", content))
+            # Tool calls
+            tool_calls = msg.get("tool_calls")
+            if tool_calls:
+                for tc in tool_calls:
+                    tc_id = tc.get("id", "")
+                    func = tc.get("function", {})
+                    name = func.get("name", "")
+                    args = func.get("arguments", "{}")
+                    parts.append(
+                        Div(
+                            render_tool_call(name, args, tc_id),
+                            cls="py-2 px-3 my-2 bg-base-200 rounded-lg border border-base-300",
+                        )
+                    )
+        elif role == "tool":
+            result_parts = _render_tool_result_parts(msg.get("content", []), msg.get("details"), msg.get("is_error", False))
+            if result_parts:
+                parts.append(Div(*result_parts, cls="py-1"))
+    return parts
 
 
 def ChatInput():
@@ -119,55 +217,7 @@ def ToolResultBlock(event):
     content = result.get("content", []) if isinstance(result, dict) else []
     details = result.get("details") if isinstance(result, dict) else None
 
-    parts = []
-
-    # Text content
-    for block in content:
-        if isinstance(block, dict) and block.get("type") == "text":
-            text = block.get("text", "")
-            if text and text != "(no output)":
-                parts.append(
-                    Pre(
-                        text,
-                        cls=f"text-sm whitespace-pre-wrap bg-base-300 p-2 rounded max-h-48 overflow-y-auto {'text-error' if is_error else ''}",
-                    )
-                )
-
-    # Images
-    for block in content:
-        if isinstance(block, dict) and block.get("type") == "image_url":
-            img_url = block.get("image_url", "")
-            modal_id = f"img-modal-{hash(img_url) % 100000}"
-            parts.append(
-                Div(
-                    Img(
-                        src=img_url,
-                        cls="max-w-md rounded-lg shadow-md cursor-pointer hover:opacity-90",
-                        onclick=f"document.getElementById('{modal_id}').showModal()",
-                    ),
-                    Dialog(
-                        Div(
-                            Img(src=img_url, cls="max-h-[80vh] max-w-full object-contain"),
-                            cls="modal-box w-fit max-w-[90vw] p-4 bg-base-300",
-                        ),
-                        Form(Button("", cls="cursor-default"), method="dialog", cls="modal-backdrop bg-neutral/80"),
-                        id=modal_id,
-                        cls="modal modal-middle",
-                    ),
-                    cls="my-2",
-                )
-            )
-
-    # Plotly charts from details
-    if details and details.get("plotly_htmls"):
-        for html in details["plotly_htmls"]:
-            parts.append(
-                Iframe(
-                    srcdoc=f"<!DOCTYPE html><html><head><style>body{{margin:0}}</style></head><body>{html}</body></html>",
-                    cls="w-full h-80 border-0 rounded bg-base-100 my-2",
-                )
-            )
-
+    parts = _render_tool_result_parts(content, details, is_error)
     if not parts:
         parts.append(Span("(no output)", cls="text-xs opacity-50"))
 

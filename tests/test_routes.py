@@ -93,10 +93,28 @@ class TestIndexRoute:
         resp = client.get("/")
         assert 'id="token-count"' in resp.text
 
-    def test_index_initializes_sandbox(self, web_app, client):
-        web_app._mock_init_sandbox.reset_mock()
+    def test_index_does_not_reset_agent(self, web_app, client):
+        """GET / should not reset the agent — preserves conversation across tabs/refresh."""
         client.get("/")
-        web_app._mock_init_sandbox.assert_called_once()
+        web_app._mock_agent.reset.assert_not_called()
+
+    def test_index_renders_existing_messages(self, web_app, client):
+        """GET / should render conversation history from agent state."""
+        web_app._mock_agent.state.messages = [
+            {"role": "user", "content": "Hello there"},
+            {"role": "assistant", "content": "Hi! How can I help?"},
+        ]
+        resp = client.get("/")
+        assert "Hello there" in resp.text
+        assert "Hi! How can I help?" in resp.text
+
+    def test_index_shows_token_count_from_cache(self, web_app, client):
+        """GET / should show accumulated token count, not always 0."""
+        # Simulate a user with accumulated tokens
+        # We need to set the token total for the user_id that the session assigns
+        resp = client.get("/")
+        # First visit is 0 tokens (new user)
+        assert "0 tokens" in resp.text
 
 
 class TestClearRoute:

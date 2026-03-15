@@ -113,6 +113,12 @@ Every liteagent event type now streams to the UI:
 - **Cause:** `message_start` eagerly created the thinking container for every assistant turn, regardless of whether thinking deltas followed.
 - **Fix:** Removed eager creation from `message_start`. Thinking container is now created lazily on the first `thinking_delta` event. A `thinking_created` flag in render state prevents duplicate creation.
 
+### Opening a new tab/refreshing destroys conversation
+- **Symptom:** Opening a second browser tab (or refreshing) wiped the agent's conversation history. Tab 1 still showed old messages in the DOM, but asking the agent a follow-up question revealed it had amnesia (e.g., couldn't remember the user's name).
+- **Cause:** `GET /` called `reset_agent(user_id)` and `reset_sandbox(user_id)` as a side effect of rendering the page. Since both tabs share the same session cookie (same `user_id`), opening tab 2 nuked the agent that tab 1 was using. `agent.reset()` doesn't abort a running stream — it just clears message history and sets `is_streaming = False`, leaving tab 1 connected to a zombie agent.
+- **Fix:** Removed `reset_agent()` / `reset_sandbox()` from `GET /`. Added `render_history(agent.state.messages)` to replay existing conversation into the page on load. Token count is read from `user_token_totals` cache. Reset now only happens via the explicit "Clear" button. Extracted `_render_tool_result_parts()` as a shared helper to avoid code duplication between `ToolResultBlock` (streaming) and `render_history` (page load).
+- **Verified with Playwright:** Told agent "My name is Christopher" in tab 1, opened tab 2 (conversation appeared), went back to tab 1 and asked "What is my name?" — agent correctly responded "Christopher". Also tested with seaborn heatmap, plotly bar chart, and matplotlib scatter plot — all rendered identically on refresh.
+
 ---
 
 ## Files Changed
@@ -145,6 +151,7 @@ Every liteagent event type now streams to the UI:
 8. **Restore full Gemini image generation examples** — re-added extended examples (editing, compositing, 4K, grounded search, multi-turn) that were dropped during migration
 9. **Update Gemini docs with Nano Banana 2** — all 3 models documented, extended aspect ratios, 512 resolution, thinking control, text rendering, image search grounding
 10. **Fix multi-tool-call rendering + pin google-genai SDK** — track streamed tool IDs in a set (not just last one), restore full SearchTypes syntax, pin google-genai>=1.67.0 in sandbox
+11. **Preserve conversation across tabs/refresh** — remove destructive reset from `GET /`, add `render_history()` to replay messages on page load, extract `_render_tool_result_parts()` shared helper, 16 new tests
 
 ---
 
@@ -166,7 +173,8 @@ Every liteagent event type now streams to the UI:
 - Cumulative token counter across prompts
 - Multiple parallel tool calls render correctly (no duplicate raw JSON)
 - Gemini image generation with SearchTypes/ImageSearch grounding
-- 169 tests passing (parallel via pytest-xdist)
+- Refresh / new tab preserves conversation history and token count
+- 185 tests passing (parallel via pytest-xdist)
 - Zero console errors
 
 ---
@@ -176,3 +184,4 @@ Every liteagent event type now streams to the UI:
 - **Style/UX polish** — thinking display (collapsible?), tool block styling, spacing, dark theme option
 - **Orphan sandbox cleanup** — server restarts leak Modal sandboxes (they idle-timeout after 30min but could be cleaned up better)
 - **Tool call streaming polish** — during streaming show just the code value, not raw JSON wrapper
+- **End-to-end tests** — Playwright + mocked agent (no real LLM/Modal) to test SSE streaming, HTMX rendering, history persistence on refresh/new tab, token count, clear, steer/abort. Would automate the manual Playwright testing we did for the two-tab bug.

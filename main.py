@@ -12,7 +12,7 @@ import uuid
 from dotenv import load_dotenv
 from fasthtml.common import *
 from agents.tools import get_agent, reset_agent, reset_sandbox, init_sandbox, user_token_totals
-from agents.ui.components import ChatMessage, ChatInput, TokenCountUpdate, render_event, make_render_state
+from agents.ui.components import ChatMessage, ChatInput, TokenCountUpdate, render_event, make_render_state, render_history
 
 load_dotenv(dotenv_path="plash.env")
 
@@ -56,9 +56,9 @@ app, rt = fast_app(
 @rt("/", methods=["GET"])
 async def index(req):
     user_id = req.state.user_id
-    reset_agent(user_id)
-    reset_sandbox(user_id)
-    asyncio.create_task(init_sandbox(user_id))
+    agent = get_agent(user_id)
+    total_tokens = user_token_totals.get(user_id, 0)
+    history = render_history(agent.state.messages)
 
     return Title("Agent Chat"), Div(
         # Header
@@ -66,7 +66,7 @@ async def index(req):
             Div(H1("Agent Chat", cls="text-xl font-bold"), cls="navbar-start"),
             Div(cls="navbar-center"),
             Div(
-                Span("0 tokens", id="token-count", cls="text-sm opacity-70 mr-4"),
+                Span(f"{total_tokens:,} tokens", id="token-count", cls="text-sm opacity-70 mr-4"),
                 Button(
                     "Stop",
                     id="stop-btn",
@@ -86,7 +86,7 @@ async def index(req):
         ),
         # Single stream view
         Div(
-            Div(id="chat-container", cls="flex flex-col gap-2 max-w-3xl mx-auto w-full"),
+            Div(*history, id="chat-container", cls="flex flex-col gap-2 max-w-3xl mx-auto w-full"),
             Div(
                 Pre(id="streaming-text", cls="whitespace-pre-wrap font-sans text-base leading-relaxed m-0 px-0"),
                 id="streaming-area",
