@@ -2,17 +2,16 @@
 
 ```
 agents/
-  agent.py           # Agentic loop (think → act → observe → repeat)
-  tools.py           # Tool definitions and implementations
+  tools.py           # Per-user Agent management, tool factory, sandbox lifecycle
   prompts.py         # System prompt generation
   coding_sandbox.py  # Modal sandbox wrapper for code execution
   driver_program.py  # Runs inside Modal sandbox, executes code
   ui/
-    components.py    # Chat, trace, input components
+    components.py    # Single-stream UI components and SSE event renderer
     markdown.py      # Markdown rendering with syntax highlighting
     tool_renderers.py # Custom tool call display
 tests/               # pytest tests
-main.py              # FastHTML app and routes
+main.py              # FastHTML app, routes, and SSE bridge
 ```
 
 
@@ -28,12 +27,13 @@ Embrace the power of HTMX. Do NOT write custom JavaScript for interactivity. HTM
 If you find yourself writing inline JS event handlers or `<script>` tags for interactivity, stop and find the HTMX way. The only acceptable JS is minimal one-liners for things HTMX genuinely can't do.
 
 
-## Database
-
-This app uses https://github.com/AnswerDotAI/fastlite for the database.
-
 ## LLM
-This app uses https://docs.litellm.ai/docs/ for the LLM API.
+This app uses [liteagent](https://github.com/DrChrisLevy/liteagent) for the agent loop, which uses https://docs.litellm.ai/docs/ under the hood for LLM calls. The model and thinking level are configured in `agents/tools.py` in `get_agent()`.
+
+The liteagent source code is located at `../liteagent`. When working with liteagent APIs (Agent, Tool, ToolResult, events, state, subscribe, etc.), read the source there to verify behavior rather than guessing.
+
+## State Management
+All per-user state (agents, sandboxes, token totals) lives in in-memory TTL caches (30 min TTL). No database is used currently.
 
 
 ## Dependencies

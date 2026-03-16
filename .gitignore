@@ -14,7 +14,8 @@ plash.env
 
 .playwright-mcp/
 
-.coverage
+.coverage*
+htmlcov/
 
 .sesskey
 .plash

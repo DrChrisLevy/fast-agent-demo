@@ -1,316 +1,180 @@
-"""Tests for the agent loop."""
-
-from unittest.mock import MagicMock, patch
-
-from agents.agent import run_agent
-
-# Test user ID for all agent tests
-TEST_USER_ID = "test-user-123"
-
-
-def _mock_llm_response(content="Mock response", tool_calls=None, total_tokens=100):
-    """Create a mock litellm completion response."""
-    mock_message = MagicMock()
-    mock_message.content = content
-    mock_message.tool_calls = tool_calls
-
-    # Make it behave like a dict for .get() calls
-    mock_message.get = lambda k, d=None: {"role": "assistant", "content": content}.get(k, d)
-
-    mock_choice = MagicMock()
-    mock_choice.message = mock_message
-
-    mock_response = MagicMock()
-    mock_response.choices = [mock_choice]
-    # Mock usage with real integer for token count formatting
-    mock_response.usage.total_tokens = total_tokens
-
-    return mock_response
-
-
-def _mock_tool_call(call_id, name, arguments):
-    """Create a mock tool call object."""
-    mock_tc = MagicMock()
-    mock_tc.id = call_id
-    mock_tc.function.name = name
-    mock_tc.function.arguments = arguments
-    return mock_tc
-
-
-def _filter_message_events(events):
-    """Filter out usage events, keeping only message events."""
-    return [e for e in events if not (isinstance(e, dict) and e.get("type") == "usage")]
-
-
-def _filter_usage_events(events):
-    """Filter to only usage events."""
-    return [e for e in events if isinstance(e, dict) and e.get("type") == "usage"]
-
-
-class TestRunAgentYieldFormat:
-    """Tests for run_agent yield format - should yield standard Chat Completions messages."""
-
-    def test_final_response_yields_assistant_message(self):
-        """Final response should yield a dict with role='assistant' and content."""
-        with patch("agents.agent.litellm.completion") as mock_completion:
-            mock_completion.return_value = _mock_llm_response("Hello there!")
-
-            messages = [{"role": "user", "content": "Hi"}]
-            events = _filter_message_events(list(run_agent(messages, TEST_USER_ID)))
-
-            assert len(events) == 1
-            assert events[0]["role"] == "assistant"
-            assert events[0]["content"] == "Hello there!"
-            assert "tool_calls" not in events[0]
-
-    def test_tool_call_yields_assistant_message_with_tool_calls(self):
-        """Tool call should yield the assistant message object with tool_calls."""
-        mock_tc = _mock_tool_call("call_123", "run_code", '{"code": "print(1)"}')
-
-        with patch("agents.agent.litellm.completion") as mock_completion:
-            with patch("agents.agent.TOOL_FUNCTIONS", {"run_code": lambda **kwargs: "1"}):
-                mock_completion.side_effect = [
-                    _mock_llm_response(content=None, tool_calls=[mock_tc]),
-                    _mock_llm_response("Done!"),
-                ]
-
-                messages = [{"role": "user", "content": "Run some code"}]
-                events = _filter_message_events(list(run_agent(messages, TEST_USER_ID)))
-
-                # Should yield: assistant with tool_calls, tool result, final assistant
-                assert len(events) == 3
-
-                # First: assistant message with tool_calls
-                assert hasattr(events[0], "tool_calls") or events[0].get("tool_calls")
-                tool_calls = getattr(events[0], "tool_calls", None) or events[0].get("tool_calls")
-                assert tool_calls is not None
-                assert len(tool_calls) == 1
-
-                # Second: tool result message
-                assert events[1]["role"] == "tool"
-                assert events[1]["tool_call_id"] == "call_123"
-                assert events[1]["content"] == "1"
-
-                # Third: final response
-                assert events[2]["role"] == "assistant"
-                assert events[2]["content"] == "Done!"
-
-    def test_multiple_tool_calls_yield_multiple_tool_results(self):
-        """Multiple parallel tool calls should yield multiple tool result messages."""
-        mock_tc1 = _mock_tool_call("call_1", "run_code", '{"code": "1+1"}')
-        mock_tc2 = _mock_tool_call("call_2", "run_code", '{"code": "2+2"}')
-
-        with patch("agents.agent.litellm.completion") as mock_completion:
-            with patch("agents.agent.TOOL_FUNCTIONS", {"run_code": lambda **kwargs: "result"}):
-                mock_completion.side_effect = [
-                    _mock_llm_response(content=None, tool_calls=[mock_tc1, mock_tc2]),
-                    _mock_llm_response("All done!"),
-                ]
-
-                messages = [{"role": "user", "content": "Run two things"}]
-                events = _filter_message_events(list(run_agent(messages, TEST_USER_ID)))
-
-                # Should yield: assistant with tool_calls, tool result 1, tool result 2, final
-                assert len(events) == 4
-
-                # First: assistant with tool_calls
-                tool_calls = getattr(events[0], "tool_calls", None) or events[0].get("tool_calls")
-                assert len(tool_calls) == 2
-
-                # Second and third: tool results
-                assert events[1]["role"] == "tool"
-                assert events[1]["tool_call_id"] == "call_1"
-                assert events[2]["role"] == "tool"
-                assert events[2]["tool_call_id"] == "call_2"
-
-                # Fourth: final response
-                assert events[3]["role"] == "assistant"
-                assert events[3]["content"] == "All done!"
-
-    def test_messages_list_updated_with_same_format(self):
-        """Messages list should contain the same objects that were yielded."""
-        with patch("agents.agent.litellm.completion") as mock_completion:
-            mock_completion.return_value = _mock_llm_response("Hello!")
-
-            # System prompt is added by main.py before calling run_agent
-            messages = [
-                {"role": "system", "content": "System prompt"},
-                {"role": "user", "content": "Hi"},
-            ]
-            events = _filter_message_events(list(run_agent(messages, TEST_USER_ID)))
-
-            # Messages should have: system, user, assistant
-            assert len(messages) == 3
-            assert messages[0]["role"] == "system"
-            assert messages[1]["role"] == "user"
-            assert messages[2]["role"] == "assistant"
-            assert messages[2]["content"] == "Hello!"
-
-            # The yielded event should be the same dict added to messages
-            assert events[0] is messages[2]
-
-
-class TestRunAgentContentFiltering:
-    """Tests for content block filtering (UI vs LLM)."""
-
-    def test_plotly_html_filtered_from_llm_messages(self):
-        """plotly_html should be in yielded message but filtered from LLM messages."""
-        mock_tc = _mock_tool_call("call_123", "run_code", '{"code": "make chart"}')
-
-        # Tool returns content blocks including plotly_html
-        tool_result = [
-            {"type": "text", "text": "stdout output"},
-            {"type": "image_url", "image_url": "data:image/png;base64,abc123"},
-            {"type": "plotly_html", "html": "<div>interactive chart</div>"},
-        ]
-
-        with patch("agents.agent.litellm.completion") as mock_completion:
-            with patch("agents.agent.TOOL_FUNCTIONS", {"run_code": lambda **kwargs: tool_result}):
-                mock_completion.side_effect = [
-                    _mock_llm_response(content=None, tool_calls=[mock_tc]),
-                    _mock_llm_response("Done!"),
-                ]
-
-                messages = [{"role": "user", "content": "Make a chart"}]
-                events = _filter_message_events(list(run_agent(messages, TEST_USER_ID)))
-
-                # Yielded tool message should have full content (for UI)
-                tool_event = events[1]
-                assert tool_event["role"] == "tool"
-                assert len(tool_event["content"]) == 3
-                assert any(c.get("type") == "plotly_html" for c in tool_event["content"])
-
-                # Messages list (for LLM) should have filtered content
-                tool_msg_in_messages = [m for m in messages if m.get("role") == "tool"][0]
-                assert len(tool_msg_in_messages["content"]) == 2
-                assert not any(c.get("type") == "plotly_html" for c in tool_msg_in_messages["content"])
-                assert any(c.get("type") == "text" for c in tool_msg_in_messages["content"])
-                assert any(c.get("type") == "image_url" for c in tool_msg_in_messages["content"])
-
-
-class TestRunAgentMessageHistory:
-    """Tests for message history management."""
-
-    def test_works_with_system_prompt_from_caller(self):
-        """run_agent expects system prompt to already be present (added by main.py)."""
-        with patch("agents.agent.litellm.completion") as mock_completion:
-            mock_completion.return_value = _mock_llm_response("Hi")
-
-            # System prompt is added by send_message() in main.py before calling run_agent
-            messages = [
-                {"role": "system", "content": "Test system prompt"},
-                {"role": "user", "content": "Hello"},
-            ]
-            list(run_agent(messages, TEST_USER_ID))
-
-            # System prompt should remain unchanged
-            assert messages[0]["role"] == "system"
-            assert messages[0]["content"] == "Test system prompt"
-
-    def test_preserves_existing_system_prompt(self):
-        """Should not add system prompt if already present."""
-        with patch("agents.agent.litellm.completion") as mock_completion:
-            mock_completion.return_value = _mock_llm_response("Hi")
-
-            messages = [
-                {"role": "system", "content": "Custom system prompt"},
-                {"role": "user", "content": "Hello"},
-            ]
-            list(run_agent(messages, TEST_USER_ID))
-
-            assert messages[0]["role"] == "system"
-            assert messages[0]["content"] == "Custom system prompt"
-            assert len([m for m in messages if m.get("role") == "system"]) == 1
-
-
-class TestRunAgentUsageTracking:
-    """Tests for token usage tracking."""
-
-    def test_yields_usage_event_with_correct_structure(self):
-        """Usage events should have type='usage' and a 'total' field."""
-        with patch("agents.agent.litellm.completion") as mock_completion:
-            mock_completion.return_value = _mock_llm_response("Hi", total_tokens=150)
-
-            messages = [{"role": "user", "content": "Hello"}]
-            events = list(run_agent(messages, TEST_USER_ID))
-            usage_events = _filter_usage_events(events)
-
-            assert len(usage_events) == 1
-            assert usage_events[0]["type"] == "usage"
-            assert usage_events[0]["total"] == 150
-
-    def test_usage_yielded_after_each_llm_call(self):
-        """Each LLM call should yield a usage event."""
-        mock_tc = _mock_tool_call("call_1", "run_code", '{"code": "1"}')
-
-        with patch("agents.agent.litellm.completion") as mock_completion:
-            with patch("agents.agent.TOOL_FUNCTIONS", {"run_code": lambda **kwargs: "1"}):
-                mock_completion.side_effect = [
-                    _mock_llm_response(content=None, tool_calls=[mock_tc], total_tokens=50),
-                    _mock_llm_response("Done!", total_tokens=75),
-                ]
-
-                messages = [{"role": "user", "content": "Run code"}]
-                events = list(run_agent(messages, TEST_USER_ID))
-                usage_events = _filter_usage_events(events)
-
-                # Should have 2 usage events (one per LLM call)
-                assert len(usage_events) == 2
-
-    def test_usage_accumulates_across_tool_calls(self):
-        """Token usage should accumulate across multiple LLM calls."""
-        mock_tc = _mock_tool_call("call_1", "run_code", '{"code": "1"}')
-
-        with patch("agents.agent.litellm.completion") as mock_completion:
-            with patch("agents.agent.TOOL_FUNCTIONS", {"run_code": lambda **kwargs: "1"}):
-                mock_completion.side_effect = [
-                    _mock_llm_response(content=None, tool_calls=[mock_tc], total_tokens=100),
-                    _mock_llm_response("Done!", total_tokens=50),
-                ]
-
-                messages = [{"role": "user", "content": "Run code"}]
-                events = list(run_agent(messages, TEST_USER_ID))
-                usage_events = _filter_usage_events(events)
-
-                # First usage: 100 tokens
-                assert usage_events[0]["total"] == 100
-                # Second usage: 100 + 50 = 150 tokens (cumulative)
-                assert usage_events[1]["total"] == 150
-
-    def test_usage_accumulates_across_multiple_tool_loops(self):
-        """Token usage should accumulate across multiple tool call loops."""
-        mock_tc1 = _mock_tool_call("call_1", "run_code", '{"code": "1"}')
-        mock_tc2 = _mock_tool_call("call_2", "run_code", '{"code": "2"}')
-
-        with patch("agents.agent.litellm.completion") as mock_completion:
-            with patch("agents.agent.TOOL_FUNCTIONS", {"run_code": lambda **kwargs: "result"}):
-                mock_completion.side_effect = [
-                    _mock_llm_response(content=None, tool_calls=[mock_tc1], total_tokens=100),
-                    _mock_llm_response(content=None, tool_calls=[mock_tc2], total_tokens=80),
-                    _mock_llm_response("All done!", total_tokens=60),
-                ]
-
-                messages = [{"role": "user", "content": "Run code"}]
-                events = list(run_agent(messages, TEST_USER_ID))
-                usage_events = _filter_usage_events(events)
-
-                # Should have 3 usage events
-                assert len(usage_events) == 3
-                # Cumulative: 100, 180, 240
-                assert usage_events[0]["total"] == 100
-                assert usage_events[1]["total"] == 180
-                assert usage_events[2]["total"] == 240
-
-    def test_usage_handles_none_total_tokens(self):
-        """Usage tracking should handle None total_tokens gracefully."""
-        with patch("agents.agent.litellm.completion") as mock_completion:
-            mock_response = _mock_llm_response("Hi", total_tokens=None)
-            mock_completion.return_value = mock_response
-
-            messages = [{"role": "user", "content": "Hello"}]
-            events = list(run_agent(messages, TEST_USER_ID))
-            usage_events = _filter_usage_events(events)
-
-            # Should still yield a usage event with 0 total
-            assert len(usage_events) == 1
-            assert usage_events[0]["total"] == 0
+"""Tests for per-user agent management in agents.tools."""
+
+from unittest.mock import patch
+
+from liteagent import Agent, Tool
+
+from agents.tools import (
+    get_agent,
+    reset_agent,
+    make_run_code_tool,
+    user_agents,
+    user_token_totals,
+)
+
+# Test user IDs
+USER_A = "test-user-a"
+USER_B = "test-user-b"
+
+
+def _clear_caches():
+    """Clear all TTL caches so tests are isolated."""
+    user_agents.clear()
+    user_token_totals.clear()
+
+
+class TestGetAgent:
+    """Tests for get_agent — per-user Agent creation and caching."""
+
+    def setup_method(self):
+        _clear_caches()
+
+    def teardown_method(self):
+        _clear_caches()
+
+    def test_creates_agent_with_correct_model(self):
+        """get_agent should create an Agent with the expected model."""
+        agent = get_agent(USER_A)
+        assert isinstance(agent, Agent)
+        assert "claude" in agent.state.model  # Model may change; just verify it's set
+
+    def test_creates_agent_with_system_prompt(self):
+        """get_agent should set a non-empty system prompt from build_system_prompt."""
+        agent = get_agent(USER_A)
+        assert agent.state.system_prompt
+        assert len(agent.state.system_prompt) > 0
+
+    def test_creates_agent_with_run_code_tool(self):
+        """get_agent should attach a run_code tool."""
+        agent = get_agent(USER_A)
+        assert len(agent.state.tools) == 1
+        assert agent.state.tools[0].name == "run_code"
+
+    def test_sets_thinking_level(self):
+        """get_agent should set a thinking level."""
+        agent = get_agent(USER_A)
+        assert agent.state.thinking_level in ("low", "medium", "high")
+
+    def test_returns_same_agent_for_same_user(self):
+        """get_agent should return the cached Agent for repeat calls with the same user."""
+        agent1 = get_agent(USER_A)
+        agent2 = get_agent(USER_A)
+        assert agent1 is agent2
+
+    def test_returns_different_agents_for_different_users(self):
+        """get_agent should create separate Agents for different user IDs."""
+        agent_a = get_agent(USER_A)
+        agent_b = get_agent(USER_B)
+        assert agent_a is not agent_b
+
+    def test_stores_agent_in_cache(self):
+        """get_agent should store the Agent in the user_agents TTL cache."""
+        assert USER_A not in user_agents
+        agent = get_agent(USER_A)
+        assert USER_A in user_agents
+        assert user_agents[USER_A] is agent
+
+
+class TestResetAgent:
+    """Tests for reset_agent — removing agents and clearing token totals."""
+
+    def setup_method(self):
+        _clear_caches()
+
+    def teardown_method(self):
+        _clear_caches()
+
+    def test_removes_agent_from_cache(self):
+        """reset_agent should remove the Agent from user_agents."""
+        get_agent(USER_A)
+        assert USER_A in user_agents
+        reset_agent(USER_A)
+        assert USER_A not in user_agents
+
+    def test_clears_token_totals(self):
+        """reset_agent should remove token totals for the user."""
+        get_agent(USER_A)
+        user_token_totals[USER_A] = 12345
+        reset_agent(USER_A)
+        assert USER_A not in user_token_totals
+
+    def test_calls_agent_reset(self):
+        """reset_agent should call agent.reset() before removing it."""
+        agent = get_agent(USER_A)
+        with patch.object(agent, "reset") as mock_reset:
+            reset_agent(USER_A)
+            mock_reset.assert_called_once()
+
+    def test_safe_when_no_agent_exists(self):
+        """reset_agent should not raise when called for a nonexistent user."""
+        reset_agent("nonexistent-user")  # should not raise
+
+    def test_safe_when_no_token_totals_exist(self):
+        """reset_agent should not raise when there are no token totals to clear."""
+        get_agent(USER_A)
+        # No token totals set
+        reset_agent(USER_A)  # should not raise
+        assert USER_A not in user_token_totals
+
+    def test_clears_token_totals_even_without_agent(self):
+        """reset_agent should clear token totals even if no agent is cached."""
+        user_token_totals[USER_A] = 9999
+        reset_agent(USER_A)
+        assert USER_A not in user_token_totals
+
+    def test_does_not_affect_other_users(self):
+        """reset_agent for one user should not affect another user's agent."""
+        get_agent(USER_A)
+        agent_b = get_agent(USER_B)
+        user_token_totals[USER_A] = 100
+        user_token_totals[USER_B] = 200
+
+        reset_agent(USER_A)
+
+        assert USER_A not in user_agents
+        assert USER_B in user_agents
+        assert user_agents[USER_B] is agent_b
+        assert user_token_totals[USER_B] == 200
+
+
+class TestMakeRunCodeTool:
+    """Tests for make_run_code_tool — the tool factory."""
+
+    def test_returns_tool_instance(self):
+        """make_run_code_tool should return a liteagent Tool."""
+        tool = make_run_code_tool(USER_A)
+        assert isinstance(tool, Tool)
+
+    def test_tool_name_is_run_code(self):
+        """The tool should be named 'run_code'."""
+        tool = make_run_code_tool(USER_A)
+        assert tool.name == "run_code"
+
+    def test_tool_has_description(self):
+        """The tool should have a non-empty description."""
+        tool = make_run_code_tool(USER_A)
+        assert tool.description
+        assert len(tool.description) > 0
+
+    def test_tool_parameters_require_code(self):
+        """The tool parameters should require a 'code' string."""
+        tool = make_run_code_tool(USER_A)
+        params = tool.parameters
+        assert params["type"] == "object"
+        assert "code" in params["properties"]
+        assert params["properties"]["code"]["type"] == "string"
+        assert "code" in params["required"]
+
+    def test_tool_has_execute_callable(self):
+        """The tool should have an execute function."""
+        tool = make_run_code_tool(USER_A)
+        assert callable(tool.execute)
+
+    def test_different_users_get_independent_tools(self):
+        """Tools for different users should be distinct instances."""
+        tool_a = make_run_code_tool(USER_A)
+        tool_b = make_run_code_tool(USER_B)
+        assert tool_a is not tool_b
+        # Both should have the same schema but different closures
+        assert tool_a.name == tool_b.name
+        assert tool_a.execute is not tool_b.execute

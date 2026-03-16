@@ -1,238 +1,145 @@
 # ruff: noqa: F405, F403
 """
-Reusable UI components for the agent chat interface.
+UI components for single-stream agent chat interface.
+
+Everything renders in one scrolling view — user messages, streaming text,
+tool executions, tool results, and finalized assistant messages.
 """
 
 import json
+
 from fasthtml.common import *
 from agents.ui.markdown import render_md
 from agents.ui.tool_renderers import render_tool_call
 
 
-# ============ Message Type Helpers ============
+# ============ Shared Helpers ============
 
 
-def is_usage_update(msg):
-    """Check if message is a usage update."""
-    return isinstance(msg, dict) and msg.get("type") == "usage"
+def _render_tool_result_parts(content, details, is_error):
+    """Render tool result content blocks (text, images, plotly). Used by both ToolResultBlock and render_history."""
+    parts = []
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "text":
+            text = block.get("text", "")
+            if text and text != "(no output)":
+                parts.append(
+                    Pre(
+                        text,
+                        cls=f"text-sm whitespace-pre-wrap bg-base-300 p-2 rounded max-h-48 overflow-y-auto {'text-error' if is_error else ''}",
+                    )
+                )
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "image_url":
+            img_url = block.get("image_url", "")
+            if isinstance(img_url, dict):
+                img_url = img_url.get("url", "")
+            modal_id = f"img-modal-{hash(img_url) % 100000}"
+            parts.append(
+                Div(
+                    Img(
+                        src=img_url,
+                        cls="max-w-md rounded-lg shadow-md cursor-pointer hover:opacity-90",
+                        onclick=f"document.getElementById('{modal_id}').showModal()",
+                    ),
+                    Dialog(
+                        Div(
+                            Img(src=img_url, cls="max-h-[80vh] max-w-full object-contain"),
+                            cls="modal-box w-fit max-w-[90vw] p-4 bg-base-300",
+                        ),
+                        Form(
+                            Button("", cls="cursor-default"),
+                            method="dialog",
+                            cls="modal-backdrop bg-neutral/80",
+                        ),
+                        id=modal_id,
+                        cls="modal modal-middle",
+                    ),
+                    cls="my-2",
+                )
+            )
+    if details and isinstance(details, dict) and details.get("plotly_htmls"):
+        for html in details["plotly_htmls"]:
+            parts.append(
+                Iframe(
+                    srcdoc=f"<!DOCTYPE html><html><head><style>body{{margin:0}}</style></head><body>{html}</body></html>",
+                    cls="w-full h-80 border-0 rounded bg-base-100 my-2",
+                )
+            )
+    return parts
 
 
-def is_final_response(msg):
-    """Check if message is the final assistant response (no tool calls)."""
-    role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "role", None)
-    tool_calls = msg.get("tool_calls") if isinstance(msg, dict) else getattr(msg, "tool_calls", None)
-    return role == "assistant" and not tool_calls
-
-
-def is_tool_result(msg):
-    """Check if message is a tool result."""
-    return isinstance(msg, dict) and msg.get("role") == "tool"
-
-
-def get_images_from_tool_result(msg):
-    """Extract image URLs from a tool result message."""
-    content = msg.get("content", "")
-    if not isinstance(content, list):
-        return []
-    return [block.get("image_url") for block in content if block.get("type") == "image_url"]
-
-
-def get_plotly_htmls_from_tool_result(msg):
-    """Extract Plotly HTML from a tool result message."""
-    content = msg.get("content", "")
-    if not isinstance(content, list):
-        return []
-    return [block.get("html") for block in content if block.get("type") == "plotly_html"]
+# ============ Chat Components ============
 
 
 def ChatMessage(role: str, content: str):
-    """Render a chat message bubble."""
+    """Render a chat message in the stream."""
     is_user = role == "user"
-    rendered = render_md(content)
-    return Div(
-        Div(
-            Div(role.capitalize(), cls="chat-header opacity-70 text-xs"),
-            Div(rendered, cls=f"chat-bubble {'chat-bubble-primary' if is_user else ''}"),
-            cls=f"chat {'chat-end' if is_user else 'chat-start'}",
-        ),
-        id=f"msg-{hash(content) % 10000}",
-    )
-
-
-def TraceMessage(msg):
-    """Render a single message in the trace view with full detail."""
-    role = msg.get("role", "unknown")
-
-    # Color coding by role
-    role_colors = {
-        "system": "badge-warning",
-        "user": "badge-primary",
-        "assistant": "badge-secondary",
-        "tool": "badge-accent",
-    }
-    badge_cls = role_colors.get(role, "badge-ghost")
-
-    # Handle different message types
-    if role == "system":
-        content = Pre(
-            msg.get("content", ""),
-            cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded overflow-x-auto max-h-40 overflow-y-auto",
+    if is_user:
+        return Div(
+            Div(
+                Div("You", cls="text-xs font-semibold opacity-60 mb-1"),
+                Div(content, cls="text-base"),
+                cls="py-3",
+            ),
+            cls="border-b border-base-300",
         )
-    elif role == "user":
-        content = Pre(
-            msg.get("content", ""),
-            cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded",
-        )
-    elif role == "assistant":
-        # Check if it has tool_calls (could be a ChatCompletionMessage object or dict)
-        tool_calls = getattr(msg, "tool_calls", None) or msg.get("tool_calls")
-        if tool_calls:
-            # Assistant message with tool calls
-            parts = []
-
-            # Show assistant content if present (some models include text alongside tool calls)
-            msg_content = getattr(msg, "content", None) or msg.get("content")
-            if msg_content:
-                parts.append(
-                    Pre(
-                        msg_content,
-                        cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded mb-2",
-                    )
-                )
-
-            calls_display = []
-            for tc in tool_calls:
-                # Handle both object and dict formats
-                if hasattr(tc, "function"):
-                    name = tc.function.name
-                    args = tc.function.arguments
-                    tc_id = tc.id
-                else:
-                    name = tc.get("function", {}).get("name", "?")
-                    args = tc.get("function", {}).get("arguments", "{}")
-                    tc_id = tc.get("id", "?")
-
-                calls_display.append(render_tool_call(name, args, tc_id))
-
-            # Parallel calls: display side-by-side in a grid
-            if len(calls_display) > 1:
-                parts.append(
-                    Div(
-                        Span("⚡ parallel", cls="text-xs opacity-50 mb-1 block"),
-                        Div(*calls_display, cls="grid grid-cols-2 gap-2"),
-                    )
-                )
-            else:
-                parts.extend(calls_display)
-
-            content = Div(*parts)
-        else:
-            # Regular assistant response
-            content = Pre(
-                msg.get("content", ""),
-                cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded",
-            )
-    elif role == "tool":
-        tool_call_id = msg.get("tool_call_id", "?")
-        msg_content = msg.get("content", "")
-
-        # Handle content blocks (list) vs plain string
-        if isinstance(msg_content, list):
-            text_parts = []
-            image_parts = []
-            plotly_parts = []
-            for block in msg_content:
-                if block.get("type") == "text":
-                    text_parts.append(
-                        Pre(
-                            block.get("text", ""),
-                            cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded max-h-32 overflow-y-auto",
-                        )
-                    )
-                elif block.get("type") == "image_url":
-                    # Render image as thumbnail with DaisyUI modal for expansion
-                    img_url = block.get("image_url", "")
-                    modal_id = f"img-modal-{hash(img_url) % 100000}"
-                    image_parts.append(
-                        Div(
-                            Img(
-                                src=img_url,
-                                cls="w-full h-auto rounded border border-base-300 cursor-pointer hover:opacity-80",
-                                onclick=f"document.getElementById('{modal_id}').showModal()",
-                            ),
-                            Dialog(
-                                Div(
-                                    Img(src=img_url, cls="max-h-[80vh] max-w-full object-contain"),
-                                    cls="modal-box w-fit max-w-[90vw] p-4 bg-base-300",
-                                ),
-                                Form(Button("", cls="cursor-default"), method="dialog", cls="modal-backdrop bg-neutral/80"),
-                                id=modal_id,
-                                cls="modal modal-middle",
-                            ),
-                        )
-                    )
-                elif block.get("type") == "plotly_html":
-                    # Render interactive Plotly chart in iframe (scripts execute in iframe)
-                    html = block.get("html", "")
-                    plotly_parts.append(
-                        Iframe(
-                            srcdoc=f"<!DOCTYPE html><html><head><style>body{{margin:0}}</style></head><body>{html}</body></html>",
-                            cls="w-full h-80 border-0 rounded bg-base-100",
-                        )
-                    )
-
-            # Build content with text parts, image grid, and plotly charts
-            parts = text_parts
-            if image_parts:
-                # Grid: 2 columns for image thumbnails
-                parts.append(
-                    Div(
-                        *image_parts,
-                        cls="grid grid-cols-2 gap-2 my-2",
-                    )
-                )
-            if plotly_parts:
-                # Plotly charts full width (not in grid)
-                parts.extend([Div(p, cls="my-2") for p in plotly_parts])
-
-            content = Div(
-                Span(f"tool_call_id: {tool_call_id}", cls="text-xs opacity-50 block mb-1"),
-                *parts,
-            )
-        else:
-            # Plain string content (backwards compatible)
-            content = Div(
-                Span(f"tool_call_id: {tool_call_id}", cls="text-xs opacity-50 block mb-1"),
-                Pre(
-                    msg_content,
-                    cls="text-xs whitespace-pre-wrap bg-base-300 p-2 rounded max-h-32 overflow-y-auto",
-                ),
-            )
     else:
-        content = Pre(
-            json.dumps(msg, indent=2, default=str),
-            cls="text-xs bg-base-300 p-2 rounded",
+        rendered = render_md(content)
+        return Div(
+            Div(
+                Div("Assistant", cls="text-xs font-semibold opacity-60 mb-1"),
+                Div(rendered, cls="text-base prose max-w-none"),
+                cls="py-3",
+            ),
+            cls="border-b border-base-300",
         )
 
-    return Div(
-        Div(Span(role.upper(), cls=f"badge {badge_cls} badge-sm"), cls="mb-1"),
-        content,
-        cls="border-l-2 border-base-300 pl-3 pr-3 py-2 mb-2",
-    )
 
-
-def TraceView(messages):
-    """Render the full message trace."""
-    if not messages:
-        return Div(Span("No messages yet", cls="text-sm opacity-50"), cls="p-4")
-
-    return Div(*[TraceMessage(m) for m in messages], cls="p-4")
+def render_history(messages):
+    """Render agent message history for page load (refresh / new tab)."""
+    parts = []
+    for msg in messages:
+        role = msg.get("role")
+        if role == "user":
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                text = " ".join(b.get("text", "") for b in content if b.get("type") == "text")
+            else:
+                text = content
+            parts.append(ChatMessage("user", text))
+        elif role == "assistant":
+            # Thinking text
+            reasoning = msg.get("reasoning_content")
+            if reasoning:
+                parts.append(Pre(reasoning, cls="whitespace-pre-wrap font-mono text-sm opacity-40 m-0 px-0 py-1"))
+            # Text content
+            content = msg.get("content")
+            if content:
+                parts.append(ChatMessage("assistant", content))
+            # Tool calls
+            tool_calls = msg.get("tool_calls")
+            if tool_calls:
+                for tc in tool_calls:
+                    tc_id = tc.get("id", "")
+                    func = tc.get("function", {})
+                    name = func.get("name", "")
+                    args = func.get("arguments", "{}")
+                    parts.append(
+                        Div(
+                            render_tool_call(name, args, tc_id),
+                            cls="py-2 px-3 my-2 bg-base-200 rounded-lg border border-base-300",
+                        )
+                    )
+        elif role == "tool":
+            result_parts = _render_tool_result_parts(msg.get("content", []), msg.get("details"), msg.get("is_error", False))
+            if result_parts:
+                parts.append(Div(*result_parts, cls="py-1"))
+    return parts
 
 
 def ChatInput():
-    """The chat input form with multiline support. Cmd+Enter to send."""
-    # Single form handles both keyboard and button submission to prevent double-triggers.
-    # hx-disabled-elt prevents re-submission while request is in flight.
+    """The chat input form. Cmd+Enter to send."""
     return Form(
         Textarea(
             name="message",
@@ -260,31 +167,12 @@ def ChatInput():
 
 
 def ThinkingIndicator():
-    """Loading indicator shown while agent is thinking."""
+    """Inline loading indicator while agent is thinking."""
     return Div(
         Span(cls="loading loading-dots loading-sm"),
-        Span("Agent is thinking...", cls="ml-2 text-sm opacity-70"),
+        Span("Thinking...", cls="ml-2 text-sm opacity-70"),
         cls="flex items-center py-2",
-    )
-
-
-def TraceUpdate(messages):
-    """OOB swap to update trace panel."""
-    return Div(
-        TraceView(messages),
-        id="trace-container",
-        hx_swap_oob="true",
-        cls="overflow-y-auto flex-1 min-h-0",
-    )
-
-
-def TraceAppend(msg):
-    """Append a message to trace with auto-scroll to bottom."""
-    scroll_js = "let c = document.getElementById('trace-container'); c.scrollTop = c.scrollHeight;"
-    return Div(
-        Div(TraceMessage(msg), **{"hx-on::load": scroll_js}),
-        id="trace-container",
-        hx_swap_oob="beforeend",
+        id="thinking-indicator",
     )
 
 
@@ -298,53 +186,234 @@ def TokenCountUpdate(total_tokens):
     )
 
 
-def ChatImages(images):
-    """Render images in the chat area with DaisyUI modal for expansion."""
-    if not images:
-        return None
+# ============ Tool Execution Components (inline in stream) ============
 
-    image_elements = []
-    for img_url in images:
-        modal_id = f"chat-img-modal-{hash(img_url) % 100000}"
-        image_elements.append(
-            Div(
-                Img(
-                    src=img_url,
-                    cls="max-w-md rounded-lg shadow-md cursor-pointer hover:opacity-90",
-                    onclick=f"document.getElementById('{modal_id}').showModal()",
-                ),
-                Dialog(
-                    Div(
-                        Img(src=img_url, cls="max-h-[80vh] max-w-full object-contain"),
-                        cls="modal-box w-fit max-w-[90vw] p-4 bg-base-300",
-                    ),
-                    Form(Button("", cls="cursor-default"), method="dialog", cls="modal-backdrop bg-neutral/80"),
-                    id=modal_id,
-                    cls="modal modal-middle",
-                ),
+
+def ToolExecutionBlock(event):
+    """Render a tool call starting — shows tool name + args inline."""
+    name = event.get("tool_name", "unknown")
+    args = event.get("args", {})
+    args_str = json.dumps(args) if isinstance(args, dict) else str(args)
+    tool_call_id = event.get("tool_call_id", "")
+
+    return Div(
+        render_tool_call(name, args_str, tool_call_id),
+        Div(
+            Span(cls="loading loading-spinner loading-xs"),
+            Span("Running...", cls="ml-1 text-xs opacity-60"),
+            cls="flex items-center mt-1",
+            id=f"tool-status-{tool_call_id}",
+        ),
+        cls="py-2 px-3 my-2 bg-base-200 rounded-lg border border-base-300",
+        id=f"tool-block-{tool_call_id}",
+    )
+
+
+def ToolResultBlock(event):
+    """Render a tool result — text, images, plotly inline."""
+    tool_call_id = event.get("tool_call_id", "")
+    result = event.get("result", {})
+    is_error = event.get("is_error", False)
+    content = result.get("content", []) if isinstance(result, dict) else []
+    details = result.get("details") if isinstance(result, dict) else None
+
+    parts = _render_tool_result_parts(content, details, is_error)
+    if not parts:
+        parts.append(Span("(no output)", cls="text-xs opacity-50"))
+
+    # Remove the running spinner for this tool
+    return Div(
+        Div(*parts),
+        # Clear the spinner
+        Div(id=f"tool-status-{tool_call_id}", hx_swap_oob="innerHTML"),
+    )
+
+
+# ============ Event Renderer ============
+
+
+_turn_counter = 0
+
+
+def make_render_state(initial_tokens=0):
+    """Create mutable state for render_event across a streaming session."""
+    return {"total_tokens": initial_tokens, "turn": _turn_counter}
+
+
+def render_event(event, state):
+    """Convert a liteagent event to HTMX HTML fragments for SSE.
+
+    Returns html_fragment_or_None. Mutates state dict in place.
+    """
+    t = event.get("type")
+    delta_type = event.get("delta_type")
+    turn = state["turn"]
+
+    # ---- Streaming deltas ----
+
+    if t == "message_update" and delta_type == "text_delta":
+        delta_text = event.get("delta", {}).get("content", "")
+        if delta_text:
+            return Pre(
+                delta_text,
+                id="streaming-text",
+                hx_swap_oob="beforeend",
+                cls="whitespace-pre-wrap font-sans text-base leading-relaxed m-0 px-0",
             )
+
+    elif t == "message_update" and delta_type == "thinking_delta":
+        delta_text = event.get("delta", {}).get("reasoning_content", "")
+        if delta_text:
+            # Lazily create the thinking container on first delta
+            if not state.get("thinking_created"):
+                state["thinking_created"] = True
+                return Div(
+                    Pre(
+                        delta_text,
+                        id=f"thinking-{turn}",
+                        cls="whitespace-pre-wrap font-mono text-sm opacity-40 m-0 px-0 py-1",
+                    ),
+                    id="chat-container",
+                    hx_swap_oob="beforeend",
+                )
+            return Span(
+                delta_text,
+                id=f"thinking-{turn}",
+                hx_swap_oob="beforeend",
+            )
+
+    elif t == "message_update" and delta_type == "tool_call_delta":
+        delta = event.get("delta", {})
+        tool_calls = delta.get("tool_calls", [])
+        if tool_calls:
+            tc = tool_calls[0]
+            tc_id = tc.get("id", "")
+            name = tc.get("function", {}).get("name", "")
+            args_chunk = tc.get("function", {}).get("arguments", "")
+
+            # First delta for a new tool call — show name + loading dots
+            if tc_id:
+                state["current_tc_id"] = tc_id
+                state.setdefault("streamed_tc_ids", set()).add(tc_id)
+                return Div(
+                    Div(
+                        Span(f"🔧 {name}", cls="font-mono text-primary font-bold"),
+                        Div(
+                            Span(cls="loading loading-dots loading-xs"),
+                            id=f"tc-loading-{tc_id}",
+                            cls="mt-1",
+                        ),
+                        Pre(
+                            id=f"tc-args-{tc_id}",
+                            cls="whitespace-pre-wrap font-mono text-sm bg-base-300 p-2 rounded mt-1 overflow-x-auto hidden",
+                        ),
+                        cls="py-2 px-3 my-2 bg-base-200 rounded-lg border border-base-300",
+                        id=f"tc-block-{tc_id}",
+                    ),
+                    id="chat-container",
+                    hx_swap_oob="beforeend",
+                )
+            # Subsequent deltas — stream args, hide spinner on first chunk
+            elif args_chunk and state.get("current_tc_id"):
+                cur_id = state["current_tc_id"]
+                if not state.get(f"tc_args_started_{cur_id}"):
+                    state[f"tc_args_started_{cur_id}"] = True
+                    return Div(
+                        Div(id=f"tc-loading-{cur_id}", hx_swap_oob="outerHTML"),
+                        Pre(
+                            args_chunk,
+                            id=f"tc-args-{cur_id}",
+                            hx_swap_oob="outerHTML",
+                            cls="whitespace-pre-wrap font-mono text-sm bg-base-300 p-2 rounded mt-1 overflow-x-auto",
+                        ),
+                    )
+                return Span(
+                    args_chunk,
+                    id=f"tc-args-{cur_id}",
+                    hx_swap_oob="beforeend",
+                )
+
+    # ---- Message boundaries ----
+
+    elif t == "message_start":
+        msg = event.get("message", {})
+        if msg.get("role") == "assistant":
+            global _turn_counter
+            _turn_counter += 1
+            state["turn"] = _turn_counter
+            state["thinking_created"] = False
+
+    elif t == "message_end":
+        msg = event.get("message", {})
+        role = msg.get("role")
+
+        usage = msg.get("usage")
+        if usage:
+            state["total_tokens"] += usage.get("total_tokens", 0)
+
+        if role == "assistant" and msg.get("content") and msg.get("stop_reason") != "tool_calls":
+            return Div(
+                Div(
+                    ChatMessage("assistant", msg["content"]),
+                    id="chat-container",
+                    hx_swap_oob="beforeend",
+                ),
+                Span(id="streaming-text", hx_swap_oob="innerHTML"),
+                TokenCountUpdate(state["total_tokens"]),
+            )
+        elif role == "assistant" and msg.get("stop_reason") == "tool_calls":
+            content = msg.get("content")
+            parts = []
+            if content:
+                parts.append(Div(ChatMessage("assistant", content), id="chat-container", hx_swap_oob="beforeend"))
+            parts.append(Span(id="streaming-text", hx_swap_oob="innerHTML"))
+            if usage:
+                parts.append(TokenCountUpdate(state["total_tokens"]))
+            return Div(*parts)
+
+    # ---- Tool execution ----
+
+    elif t == "tool_execution_start":
+        tool_call_id = event.get("tool_call_id", "")
+        name = event.get("tool_name", "")
+        args = event.get("args", {})
+        args_str = json.dumps(args) if isinstance(args, dict) else str(args)
+
+        if tool_call_id in state.get("streamed_tc_ids", set()):
+            # Already streamed — replace entire block with rendered version + spinner
+            return Div(
+                render_tool_call(name, args_str, tool_call_id),
+                Div(
+                    Span(cls="loading loading-spinner loading-xs"),
+                    Span("Running...", cls="ml-1 text-xs opacity-60"),
+                    cls="flex items-center mt-1",
+                    id=f"tool-status-{tool_call_id}",
+                ),
+                cls="py-2 px-3 my-2 bg-base-200 rounded-lg border border-base-300",
+                id=f"tc-block-{tool_call_id}",
+                hx_swap_oob="outerHTML",
+            )
+        else:
+            # No streaming happened — render full block
+            return Div(
+                ToolExecutionBlock(event),
+                id="chat-container",
+                hx_swap_oob="beforeend",
+            )
+
+    elif t == "tool_execution_end":
+        tool_call_id = event.get("tool_call_id", "")
+        return Div(
+            Div(ToolResultBlock(event), id="chat-container", hx_swap_oob="beforeend"),
+            Div(id=f"tool-status-{tool_call_id}", hx_swap_oob="innerHTML"),
         )
 
-    return Div(
-        Div(*image_elements, cls="flex flex-wrap gap-3"),
-        cls="chat chat-start",
-    )
+    # ---- Session lifecycle ----
 
-
-def ChatPlotly(plotly_htmls):
-    """Render interactive Plotly charts in the chat area (full width, not in chat bubble)."""
-    if not plotly_htmls:
-        return None
-
-    chart_elements = [
-        Iframe(
-            srcdoc=f"<!DOCTYPE html><html><head><style>body{{margin:0}}</style></head><body>{html}</body></html>",
-            cls="w-full h-96 rounded-lg border border-base-300",
+    elif t == "agent_end":
+        return Div(
+            Button("Stop", id="stop-btn", hx_swap_oob="true", cls="btn btn-ghost btn-sm hidden", hx_post="/stop"),
+            Span(id="streaming-text", hx_swap_oob="innerHTML"),
         )
-        for html in plotly_htmls
-    ]
 
-    return Div(
-        *chart_elements,
-        cls="flex flex-col gap-3 my-2",
-    )
+    return None

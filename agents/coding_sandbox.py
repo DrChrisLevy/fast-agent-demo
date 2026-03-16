@@ -54,7 +54,7 @@ class ModalSandbox:
             "pyarrow",  # file formats
             "Pillow",
             "tabulate",  # utilities
-            "google-genai",  # Gemini image generation
+            "google-genai>=1.67.0",  # Gemini image generation (SearchTypes, ImageSearch)
         )
         .env(
             {
