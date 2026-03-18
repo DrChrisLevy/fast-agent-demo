@@ -367,6 +367,8 @@ def render_event(event, state):
             _turn_counter += 1
             state["turn"] = _turn_counter
             state["thinking_created"] = False
+            state["streamed_tc_ids"] = set()
+            state["exec_count"] = 0
 
     elif t == "message_end":
         msg = event.get("message", {})
@@ -396,6 +398,7 @@ def render_event(event, state):
             if content:
                 parts.append(Div(ChatMessage("assistant", content), id="chat-container", hx_swap_oob="beforeend"))
             parts.append(Span(id="streaming-text", hx_swap_oob="innerHTML"))
+            state["exec_count"] = 0
             if usage:
                 parts.append(TokenCountUpdate(state["total_tokens"]))
             return Div(*parts)
@@ -409,18 +412,30 @@ def render_event(event, state):
         args_str = json.dumps(args) if isinstance(args, dict) else str(args)
 
         if tool_call_id in state.get("streamed_tc_ids", set()):
+            state["exec_count"] = state.get("exec_count", 0) + 1
+            n = state["exec_count"]
+            total = len(state["streamed_tc_ids"])
             # Already streamed — replace entire block with rendered version + spinner
             return Div(
-                render_tool_call(name, args_str, tool_call_id),
+                Div(
+                    render_tool_call(name, args_str, tool_call_id),
+                    Div(
+                        Span(cls="loading loading-spinner loading-xs"),
+                        Span("Running...", cls="ml-1 text-xs opacity-60"),
+                        cls="flex items-center mt-1",
+                        id=f"tool-status-{tool_call_id}",
+                    ),
+                    cls="py-2 px-3 my-2 bg-base-200 rounded-lg border border-base-300",
+                    id=f"tc-block-{tool_call_id}",
+                    hx_swap_oob="outerHTML",
+                ),
                 Div(
                     Span(cls="loading loading-spinner loading-xs"),
-                    Span("Running...", cls="ml-1 text-xs opacity-60"),
-                    cls="flex items-center mt-1",
-                    id=f"tool-status-{tool_call_id}",
+                    Span(f"Running tool {n} of {total}...", cls="ml-2 text-sm opacity-70"),
+                    cls="flex items-center py-2",
+                    id="tool-exec-progress",
+                    hx_swap_oob="innerHTML",
                 ),
-                cls="py-2 px-3 my-2 bg-base-200 rounded-lg border border-base-300",
-                id=f"tc-block-{tool_call_id}",
-                hx_swap_oob="outerHTML",
             )
         else:
             # No streaming happened — render full block
@@ -432,10 +447,16 @@ def render_event(event, state):
 
     elif t == "tool_execution_end":
         tool_call_id = event.get("tool_call_id", "")
-        return Div(
+        parts = [
             Div(ToolResultBlock(event), id="chat-container", hx_swap_oob="beforeend"),
             Div(id=f"tool-status-{tool_call_id}", hx_swap_oob="innerHTML"),
-        )
+        ]
+        # Clear progress indicator after last tool
+        completed = state.get("exec_count", 0)
+        total = len(state.get("streamed_tc_ids", set()))
+        if completed and completed >= total:
+            parts.append(Div(id="tool-exec-progress", hx_swap_oob="innerHTML"))
+        return Div(*parts)
 
     # ---- Session lifecycle ----
 

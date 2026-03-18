@@ -532,9 +532,7 @@ class TestRenderEvent:
         event = {
             "type": "message_update",
             "delta_type": "tool_call_delta",
-            "delta": {
-                "tool_calls": [{"id": "tc_701", "function": {"name": "run_code", "arguments": ""}}]
-            },
+            "delta": {"tool_calls": [{"id": "tc_701", "function": {"name": "run_code", "arguments": ""}}]},
         }
         result = render_event(event, state)
         html = render(result)

@@ -105,6 +105,7 @@ async def index(req):
         Div(
             Div(*history, id="chat-container", cls="flex flex-col gap-2 max-w-7xl mx-auto w-full"),
             Div(
+                Div(id="tool-exec-progress"),
                 Pre(id="streaming-text", cls="whitespace-pre-wrap font-sans text-base leading-relaxed m-0 px-0"),
                 id="streaming-area",
                 cls="max-w-7xl mx-auto w-full",
@@ -145,6 +146,7 @@ def send_message(req, message: str):
         Div(ChatMessage("user", message), id="chat-container", hx_swap_oob="beforeend"),
         # SSE streaming container — outerHTML so SSE attributes land in DOM
         Div(
+            Div(id="tool-exec-progress"),
             Pre(id="streaming-text", cls="whitespace-pre-wrap font-sans text-base leading-relaxed m-0 px-0"),
             hx_ext="sse",
             sse_connect="/agent-stream",
@@ -222,6 +224,7 @@ async def clear_chat(req):
     return (
         "",  # Clear chat container
         Div(
+            Div(id="tool-exec-progress"),
             Pre(id="streaming-text", cls="whitespace-pre-wrap font-sans text-base leading-relaxed m-0 px-0"),
             id="streaming-area",
             hx_swap_oob="outerHTML",
