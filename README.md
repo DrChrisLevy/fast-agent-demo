@@ -98,7 +98,4 @@ uv run plash_deploy
 
 ## TODO
 
-- **Persistent storage** — Currently uses in-memory TTL caches (30 min TTL); [fastlite](https://github.com/AnswerDotAI/fastlite) would be a good option for database storage if needed
-- **Style/UX polish** — Collapsible thinking display, tool block styling, dark theme
-- **Tool call streaming polish** — Show just the code value during streaming, not raw JSON wrapper
-- **End-to-end tests** — Playwright + mocked agent for automated UI testing
+See [TODO.md](TODO.md) for the full list of planned features and improvements.
