@@ -95,7 +95,3 @@ uv export --no-hashes --no-dev -o requirements.txt
 ```bash
 uv run plash_deploy
 ```
-
-## TODO
-
-See [TODO.md](TODO.md) for the full list of planned features and improvements.
