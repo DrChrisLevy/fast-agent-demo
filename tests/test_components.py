@@ -520,6 +520,47 @@ class TestRenderEvent:
         html2 = render(result2)
         assert "beforeend" in html2
 
+    def test_tool_call_delta_renders_previous_on_new_tc(self):
+        """When a second tool call starts streaming, the first gets rendered."""
+        state = make_render_state()
+        # Simulate first tool call streaming
+        state["current_tc_id"] = "tc_700"
+        state["current_tc_name"] = "run_code"
+        state["current_tc_args"] = '{"code": "print(1)"}'
+        state["streamed_tc_ids"] = {"tc_700"}
+        # Second tool call arrives
+        event = {
+            "type": "message_update",
+            "delta_type": "tool_call_delta",
+            "delta": {
+                "tool_calls": [{"id": "tc_701", "function": {"name": "run_code", "arguments": ""}}]
+            },
+        }
+        result = render_event(event, state)
+        html = render(result)
+        # Previous tool block replaced with rendered version
+        assert 'id="tc-block-tc_700"' in html
+        assert "outerHTML" in html
+        # New tool block appended
+        assert 'id="tc-block-tc_701"' in html
+        assert state["current_tc_id"] == "tc_701"
+
+    def test_message_end_tool_calls_renders_last_tc(self):
+        """message_end with stop_reason=tool_calls renders the last streamed tool call."""
+        state = make_render_state()
+        state["current_tc_id"] = "tc_800"
+        state["current_tc_name"] = "run_code"
+        state["current_tc_args"] = '{"code": "print(2)"}'
+        state["streamed_tc_ids"] = {"tc_800"}
+        event = {
+            "type": "message_end",
+            "message": {"role": "assistant", "stop_reason": "tool_calls", "content": ""},
+        }
+        result = render_event(event, state)
+        html = render(result)
+        assert 'id="tc-block-tc_800"' in html
+        assert "outerHTML" in html
+
     def test_message_start_increments_turn_counter(self):
         state = make_render_state()
         initial_turn = state["turn"]

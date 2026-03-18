@@ -232,6 +232,20 @@ def ToolResultBlock(event):
 # ============ Event Renderer ============
 
 
+def _render_streamed_tc(state):
+    """Render the current streamed tool call block (replaces raw args with pretty version).
+    Returns an OOB div or None."""
+    tc_id = state.get("current_tc_id")
+    if tc_id and state.get("current_tc_args"):
+        return Div(
+            render_tool_call(state["current_tc_name"], state["current_tc_args"], tc_id),
+            cls="py-2 px-3 my-2 bg-base-200 rounded-lg border border-base-300",
+            id=f"tc-block-{tc_id}",
+            hx_swap_oob="outerHTML",
+        )
+    return None
+
+
 _turn_counter = 0
 
 
@@ -293,9 +307,15 @@ def render_event(event, state):
 
             # First delta for a new tool call — show name + loading dots
             if tc_id:
+                # Render previous tool call now that its streaming is done
+                prev_render = _render_streamed_tc(state)
+
                 state["current_tc_id"] = tc_id
+                state["current_tc_name"] = name
+                state["current_tc_args"] = ""
                 state.setdefault("streamed_tc_ids", set()).add(tc_id)
-                return Div(
+
+                new_block = Div(
                     Div(
                         Span(f"🔧 {name}", cls="font-mono text-primary font-bold"),
                         Div(
@@ -313,9 +333,14 @@ def render_event(event, state):
                     id="chat-container",
                     hx_swap_oob="beforeend",
                 )
+
+                if prev_render:
+                    return Div(prev_render, new_block)
+                return new_block
             # Subsequent deltas — stream args, hide spinner on first chunk
             elif args_chunk and state.get("current_tc_id"):
                 cur_id = state["current_tc_id"]
+                state["current_tc_args"] = state.get("current_tc_args", "") + args_chunk
                 if not state.get(f"tc_args_started_{cur_id}"):
                     state[f"tc_args_started_{cur_id}"] = True
                     return Div(
@@ -364,6 +389,10 @@ def render_event(event, state):
         elif role == "assistant" and msg.get("stop_reason") == "tool_calls":
             content = msg.get("content")
             parts = []
+            # Render the last streamed tool call
+            last_render = _render_streamed_tc(state)
+            if last_render:
+                parts.append(last_render)
             if content:
                 parts.append(Div(ChatMessage("assistant", content), id="chat-container", hx_swap_oob="beforeend"))
             parts.append(Span(id="streaming-text", hx_swap_oob="innerHTML"))
