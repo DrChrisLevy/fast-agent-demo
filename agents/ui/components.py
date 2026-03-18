@@ -416,7 +416,7 @@ def render_event(event, state):
             n = state["exec_count"]
             total = len(state["streamed_tc_ids"])
             # Already streamed — replace entire block with rendered version + spinner
-            return Div(
+            parts = [
                 Div(
                     render_tool_call(name, args_str, tool_call_id),
                     Div(
@@ -429,14 +429,19 @@ def render_event(event, state):
                     id=f"tc-block-{tool_call_id}",
                     hx_swap_oob="outerHTML",
                 ),
-                Div(
-                    Span(cls="loading loading-spinner loading-xs"),
-                    Span(f"Running tool {n} of {total}...", cls="ml-2 text-sm opacity-70"),
-                    cls="flex items-center py-2",
-                    id="tool-exec-progress",
-                    hx_swap_oob="innerHTML",
-                ),
-            )
+            ]
+            # Only show progress indicator for multiple tool calls
+            if total > 1:
+                parts.append(
+                    Div(
+                        Span(cls="loading loading-spinner loading-xs"),
+                        Span(f"Running tool {n} of {total}...", cls="ml-2 text-sm opacity-70"),
+                        cls="flex items-center py-2",
+                        id="tool-exec-progress",
+                        hx_swap_oob="innerHTML",
+                    ),
+                )
+            return Div(*parts)
         else:
             # No streaming happened — render full block
             return Div(
