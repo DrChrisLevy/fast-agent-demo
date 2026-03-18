@@ -103,18 +103,18 @@ async def index(req):
         ),
         # Single stream view
         Div(
-            Div(*history, id="chat-container", cls="flex flex-col gap-2 max-w-3xl mx-auto w-full"),
+            Div(*history, id="chat-container", cls="flex flex-col gap-2 max-w-7xl mx-auto w-full"),
             Div(
                 Pre(id="streaming-text", cls="whitespace-pre-wrap font-sans text-base leading-relaxed m-0 px-0"),
                 id="streaming-area",
-                cls="max-w-3xl mx-auto w-full",
+                cls="max-w-7xl mx-auto w-full",
             ),
             cls="flex-1 overflow-y-auto p-4",
             id="scroll-container",
         ),
         # Input area (pinned to bottom)
         Div(
-            Div(ChatInput(), cls="max-w-3xl mx-auto w-full"),
+            Div(ChatInput(), cls="max-w-7xl mx-auto w-full"),
             cls="p-4 border-t border-base-300 bg-base-200",
         ),
         cls="h-screen flex flex-col overflow-hidden bg-base-200",
@@ -153,7 +153,7 @@ def send_message(req, message: str):
             hx_swap="none",
             id="streaming-area",
             hx_swap_oob="outerHTML",
-            cls="max-w-3xl mx-auto w-full",
+            cls="max-w-7xl mx-auto w-full",
         ),
         # Show stop button
         Button("Stop", id="stop-btn", hx_post="/stop", cls="btn btn-error btn-sm", hx_swap_oob="true"),
@@ -225,7 +225,7 @@ async def clear_chat(req):
             Pre(id="streaming-text", cls="whitespace-pre-wrap font-sans text-base leading-relaxed m-0 px-0"),
             id="streaming-area",
             hx_swap_oob="outerHTML",
-            cls="max-w-3xl mx-auto w-full",
+            cls="max-w-7xl mx-auto w-full",
         ),
         TokenCountUpdate(0),
     )
