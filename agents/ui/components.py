@@ -183,13 +183,16 @@ def ModelSelector(current_model: str, oob=False):
     )
 
 
-def ThinkingIndicator():
-    """Inline loading indicator while agent is thinking."""
+def ThinkingIndicator(oob=False):
+    """Block-level indicator shown while waiting for LLM response.
+    Targets #tool-exec-progress so it shares space with multi-tool progress."""
+    kwargs = {"hx_swap_oob": "outerHTML"} if oob else {}
     return Div(
-        Span(cls="loading loading-dots loading-sm"),
+        Span(cls="loading loading-dots loading-xs"),
         Span("Thinking...", cls="ml-2 text-sm opacity-70"),
         cls="flex items-center py-2",
-        id="thinking-indicator",
+        id="tool-exec-progress",
+        **kwargs,
     )
 
 
@@ -206,6 +209,16 @@ def TokenCountUpdate(total_tokens):
 # ============ Tool Execution Components (inline in stream) ============
 
 
+def _tool_status_spinner(tool_call_id):
+    """Inline 'Running...' spinner inside a tool execution block."""
+    return Div(
+        Span(cls="loading loading-spinner loading-xs"),
+        Span("Running...", cls="ml-1 text-xs opacity-60"),
+        cls="flex items-center mt-1",
+        id=f"tool-status-{tool_call_id}",
+    )
+
+
 def ToolExecutionBlock(event):
     """Render a tool call starting — shows tool name + args inline."""
     name = event.get("tool_name", "unknown")
@@ -215,12 +228,7 @@ def ToolExecutionBlock(event):
 
     return Div(
         render_tool_call(name, args_str, tool_call_id),
-        Div(
-            Span(cls="loading loading-spinner loading-xs"),
-            Span("Running...", cls="ml-1 text-xs opacity-60"),
-            cls="flex items-center mt-1",
-            id=f"tool-status-{tool_call_id}",
-        ),
+        _tool_status_spinner(tool_call_id),
         cls="py-2 px-3 my-2 bg-base-200 rounded-lg border border-base-300",
         id=f"tool-block-{tool_call_id}",
     )
@@ -386,6 +394,8 @@ def render_event(event, state):
             state["thinking_created"] = False
             state["streamed_tc_ids"] = set()
             state["exec_count"] = 0
+            # Clear thinking indicator — content is about to stream
+            return Div(id="tool-exec-progress", hx_swap_oob="outerHTML")
 
     elif t == "message_end":
         msg = event.get("message", {})
@@ -436,12 +446,7 @@ def render_event(event, state):
             parts = [
                 Div(
                     render_tool_call(name, args_str, tool_call_id),
-                    Div(
-                        Span(cls="loading loading-spinner loading-xs"),
-                        Span("Running...", cls="ml-1 text-xs opacity-60"),
-                        cls="flex items-center mt-1",
-                        id=f"tool-status-{tool_call_id}",
-                    ),
+                    _tool_status_spinner(tool_call_id),
                     cls="py-2 px-3 my-2 bg-base-200 rounded-lg border border-base-300",
                     id=f"tc-block-{tool_call_id}",
                     hx_swap_oob="outerHTML",
@@ -455,7 +460,7 @@ def render_event(event, state):
                         Span(f"Running tool {n} of {total}...", cls="ml-2 text-sm opacity-70"),
                         cls="flex items-center py-2",
                         id="tool-exec-progress",
-                        hx_swap_oob="innerHTML",
+                        hx_swap_oob="outerHTML",
                     ),
                 )
             return Div(*parts)
@@ -473,11 +478,11 @@ def render_event(event, state):
             Div(ToolResultBlock(event), id="chat-container", hx_swap_oob="beforeend"),
             Div(id=f"tool-status-{tool_call_id}", hx_swap_oob="innerHTML"),
         ]
-        # Clear progress indicator after last tool
+        # After last tool, show thinking indicator (model is processing results)
         completed = state.get("exec_count", 0)
         total = len(state.get("streamed_tc_ids", set()))
         if completed and completed >= total:
-            parts.append(Div(id="tool-exec-progress", hx_swap_oob="innerHTML"))
+            parts.append(ThinkingIndicator(oob=True))
         return Div(*parts)
 
     # ---- Session lifecycle ----
@@ -486,6 +491,7 @@ def render_event(event, state):
         return Div(
             Button("Stop", id="stop-btn", hx_swap_oob="true", cls="btn btn-ghost btn-sm hidden", hx_post="/stop"),
             Span(id="streaming-text", hx_swap_oob="innerHTML"),
+            Div(id="tool-exec-progress", hx_swap_oob="outerHTML"),
         )
 
     return None

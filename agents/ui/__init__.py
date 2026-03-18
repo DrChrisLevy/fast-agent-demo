@@ -7,6 +7,7 @@ from agents.ui.components import (
     ChatMessage,
     ChatInput,
     ModelSelector,
+    ThinkingIndicator,
     TokenCountUpdate,
     ToolExecutionBlock,
     ToolResultBlock,

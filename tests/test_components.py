@@ -5,6 +5,7 @@ from agents.ui.components import (
     ChatMessage,
     ChatInput,
     ModelSelector,
+    ThinkingIndicator,
     TokenCountUpdate,
     ToolExecutionBlock,
     ToolResultBlock,
@@ -125,6 +126,33 @@ class TestModelSelector:
     def test_default_model_selected_by_default(self):
         html = render(ModelSelector(DEFAULT_MODEL))
         assert f'value="{DEFAULT_MODEL}" selected' in html
+
+
+# ============ ThinkingIndicator ============
+
+
+class TestThinkingIndicator:
+    """Tests for ThinkingIndicator component."""
+
+    def test_has_correct_id(self):
+        html = render(ThinkingIndicator())
+        assert 'id="tool-exec-progress"' in html
+
+    def test_has_loading_dots(self):
+        html = render(ThinkingIndicator())
+        assert "loading-dots" in html
+
+    def test_has_thinking_text(self):
+        html = render(ThinkingIndicator())
+        assert "Thinking..." in html
+
+    def test_no_oob_by_default(self):
+        html = render(ThinkingIndicator())
+        assert "hx-swap-oob" not in html
+
+    def test_oob_when_requested(self):
+        html = render(ThinkingIndicator(oob=True))
+        assert 'hx-swap-oob="outerHTML"' in html
 
 
 # ============ TokenCountUpdate ============
@@ -603,6 +631,55 @@ class TestRenderEvent:
         render_event(event, state)
         assert state["turn"] > initial_turn
         assert state.get("thinking_created") is False
+
+    def test_message_start_clears_thinking_indicator(self):
+        """message_start (assistant) should clear the thinking indicator."""
+        state = make_render_state()
+        event = {
+            "type": "message_start",
+            "message": {"role": "assistant"},
+        }
+        result = render_event(event, state)
+        html = render(result)
+        assert 'id="tool-exec-progress"' in html
+        assert "Thinking" not in html
+
+    def test_tool_execution_end_shows_thinking_after_last_tool(self):
+        """After the last tool finishes, thinking indicator should appear."""
+        state = make_render_state()
+        state["streamed_tc_ids"] = {"tc_900"}
+        state["exec_count"] = 1
+        event = {
+            "type": "tool_execution_end",
+            "tool_call_id": "tc_900",
+            "result": {"content": [{"type": "text", "text": "done"}]},
+        }
+        result = render_event(event, state)
+        html = render(result)
+        assert "Thinking..." in html
+        assert "loading-dots" in html
+
+    def test_tool_execution_end_no_thinking_if_more_tools(self):
+        """Thinking indicator should NOT appear if more tools are pending."""
+        state = make_render_state()
+        state["streamed_tc_ids"] = {"tc_a", "tc_b"}
+        state["exec_count"] = 1  # only 1 of 2 done
+        event = {
+            "type": "tool_execution_end",
+            "tool_call_id": "tc_a",
+            "result": {"content": []},
+        }
+        result = render_event(event, state)
+        html = render(result)
+        assert "Thinking..." not in html
+
+    def test_agent_end_clears_thinking_indicator(self):
+        """agent_end should clear the thinking indicator."""
+        state = make_render_state()
+        event = {"type": "agent_end"}
+        result = render_event(event, state)
+        html = render(result)
+        assert 'id="tool-exec-progress"' in html
 
 
 # ============ render_history ============

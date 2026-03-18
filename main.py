@@ -12,7 +12,16 @@ import uuid
 from dotenv import load_dotenv
 from fasthtml.common import *
 from agents.tools import get_agent, reset_agent, reset_sandbox, init_sandbox, user_token_totals, MODELS
-from agents.ui.components import ChatMessage, ChatInput, ModelSelector, TokenCountUpdate, render_event, make_render_state, render_history
+from agents.ui.components import (
+    ChatMessage,
+    ChatInput,
+    ModelSelector,
+    ThinkingIndicator,
+    TokenCountUpdate,
+    render_event,
+    make_render_state,
+    render_history,
+)
 
 load_dotenv(dotenv_path="plash.env")
 
@@ -149,7 +158,7 @@ def send_message(req, message: str):
         Div(ChatMessage("user", message), id="chat-container", hx_swap_oob="beforeend"),
         # SSE streaming container — outerHTML so SSE attributes land in DOM
         Div(
-            Div(id="tool-exec-progress"),
+            ThinkingIndicator(),
             Pre(id="streaming-text", cls="whitespace-pre-wrap font-sans text-base leading-relaxed m-0 px-0"),
             hx_ext="sse",
             sse_connect="/agent-stream",
