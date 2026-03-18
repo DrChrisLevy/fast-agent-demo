@@ -6,6 +6,7 @@ from agents.ui.tool_renderers import TOOL_RENDERERS, render_tool_call
 from agents.ui.components import (
     ChatMessage,
     ChatInput,
+    ModelSelector,
     TokenCountUpdate,
     ToolExecutionBlock,
     ToolResultBlock,

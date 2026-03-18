@@ -11,8 +11,8 @@ import uuid
 
 from dotenv import load_dotenv
 from fasthtml.common import *
-from agents.tools import get_agent, reset_agent, reset_sandbox, init_sandbox, user_token_totals
-from agents.ui.components import ChatMessage, ChatInput, TokenCountUpdate, render_event, make_render_state, render_history
+from agents.tools import get_agent, reset_agent, reset_sandbox, init_sandbox, user_token_totals, MODELS
+from agents.ui.components import ChatMessage, ChatInput, ModelSelector, TokenCountUpdate, render_event, make_render_state, render_history
 
 load_dotenv(dotenv_path="plash.env")
 
@@ -77,12 +77,15 @@ async def index(req):
     total_tokens = user_token_totals.get(user_id, 0)
     history = render_history(agent.state.messages)
 
+    has_messages = bool(agent.state.messages)
+
     return Title("Agent Chat"), Div(
         # Header
         Nav(
             Div(H1("Agent Chat", cls="text-xl font-bold"), cls="navbar-start"),
             Div(cls="navbar-center"),
             Div(
+                ModelSelector(agent.state.model) if not has_messages else Span(id="model-selector"),
                 Span(f"{total_tokens:,} tokens", id="token-count", cls="text-sm opacity-70 mr-4"),
                 Button(
                     "Stop",
@@ -97,7 +100,7 @@ async def index(req):
                     hx_swap="innerHTML",
                     cls="btn btn-ghost btn-sm",
                 ),
-                cls="navbar-end items-center",
+                cls="navbar-end items-center gap-2",
             ),
             cls="navbar bg-base-100 border-b border-base-300",
         ),
@@ -157,8 +160,9 @@ def send_message(req, message: str):
             hx_swap_oob="outerHTML",
             cls="max-w-7xl mx-auto w-full",
         ),
-        # Show stop button
+        # Show stop button, hide model selector
         Button("Stop", id="stop-btn", hx_post="/stop", cls="btn btn-error btn-sm", hx_swap_oob="true"),
+        Span(id="model-selector", hx_swap_oob="outerHTML"),
     )
 
 
@@ -210,6 +214,19 @@ def stop_agent(req):
     return Button("Stop", id="stop-btn", hx_swap_oob="true", cls="btn btn-ghost btn-sm hidden", hx_post="/stop")
 
 
+@rt("/set-model", methods=["POST"])
+def set_model(req, model: str):
+    valid_ids = {m["id"] for m in MODELS}
+    if model not in valid_ids:
+        return ""
+    user_id = req.state.user_id
+    agent = get_agent(user_id)
+    if agent.state.is_streaming:
+        return ""
+    agent.set_model(model)
+    return ""
+
+
 @rt("/clear", methods=["POST"])
 async def clear_chat(req):
     user_id = req.state.user_id
@@ -220,6 +237,7 @@ async def clear_chat(req):
     reset_agent(user_id)
     reset_sandbox(user_id)
     asyncio.create_task(init_sandbox(user_id))
+    new_agent = get_agent(user_id)
 
     return (
         "",  # Clear chat container
@@ -231,6 +249,7 @@ async def clear_chat(req):
             cls="max-w-7xl mx-auto w-full",
         ),
         TokenCountUpdate(0),
+        ModelSelector(new_agent.state.model, oob=True),
     )
 
 

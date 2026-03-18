@@ -4,6 +4,7 @@ from fasthtml.common import to_xml
 from agents.ui.components import (
     ChatMessage,
     ChatInput,
+    ModelSelector,
     TokenCountUpdate,
     ToolExecutionBlock,
     ToolResultBlock,
@@ -11,6 +12,7 @@ from agents.ui.components import (
     render_event,
     render_history,
 )
+from agents.tools import MODELS, DEFAULT_MODEL
 
 
 def render(component):
@@ -91,6 +93,38 @@ class TestChatInput:
         assert "hx-disabled-elt" in html
         assert "send-btn" in html
         assert "message-input" in html
+
+
+# ============ ModelSelector ============
+
+
+class TestModelSelector:
+    """Tests for ModelSelector component."""
+
+    def test_renders_select_element(self):
+        html = render(ModelSelector(DEFAULT_MODEL))
+        assert "<select" in html
+
+    def test_has_correct_id(self):
+        html = render(ModelSelector(DEFAULT_MODEL))
+        assert 'id="model-selector"' in html
+
+    def test_has_htmx_post(self):
+        html = render(ModelSelector(DEFAULT_MODEL))
+        assert 'hx-post="/set-model"' in html
+
+    def test_renders_all_models(self):
+        html = render(ModelSelector(DEFAULT_MODEL))
+        for m in MODELS:
+            assert m["label"] in html
+
+    def test_marks_current_model_selected(self):
+        html = render(ModelSelector("gemini/gemini-3-flash-preview"))
+        assert 'value="gemini/gemini-3-flash-preview" selected' in html
+
+    def test_default_model_selected_by_default(self):
+        html = render(ModelSelector(DEFAULT_MODEL))
+        assert f'value="{DEFAULT_MODEL}" selected' in html
 
 
 # ============ TokenCountUpdate ============

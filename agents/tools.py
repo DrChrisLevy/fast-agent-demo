@@ -11,6 +11,17 @@ from liteagent import Agent, Tool, ToolResult
 from agents.coding_sandbox import ModalSandbox
 from agents.prompts import build_system_prompt
 
+# Available models for the UI selector
+MODELS = [
+    {"id": "anthropic/claude-opus-4-6", "label": "Claude Opus 4.6"},
+    {"id": "anthropic/claude-sonnet-4-6", "label": "Claude Sonnet 4.6"},
+    {"id": "gemini/gemini-3-flash-preview", "label": "Gemini 3 Flash"},
+    {"id": "gemini/gemini-3-pro-preview", "label": "Gemini 3 Pro"},
+    {"id": "gemini/gemini-3.1-pro-preview", "label": "Gemini 3.1 Pro"},
+]
+
+DEFAULT_MODEL = MODELS[0]["id"]
+
 # TTL caches for per-user isolation (30 min TTL matches Modal's idle timeout)
 user_agents: TTLCache[str, Agent] = TTLCache(maxsize=1000, ttl=1800)
 user_sandboxes: TTLCache[str, ModalSandbox] = TTLCache(maxsize=1000, ttl=1800)
@@ -111,7 +122,7 @@ def get_agent(user_id: str) -> Agent:
     """Get or create the Agent for a user."""
     if user_id not in user_agents:
         agent = Agent(
-            model="anthropic/claude-opus-4-6",
+            model=DEFAULT_MODEL,
             tools=[make_run_code_tool(user_id)],
             system_prompt=build_system_prompt(),
         )

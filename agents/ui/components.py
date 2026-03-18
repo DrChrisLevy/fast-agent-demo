@@ -11,6 +11,7 @@ import json
 from fasthtml.common import *
 from agents.ui.markdown import render_md
 from agents.ui.tool_renderers import render_tool_call
+from agents.tools import MODELS
 
 
 # ============ Shared Helpers ============
@@ -163,6 +164,22 @@ def ChatInput():
         hx_disabled_elt="#send-btn, #message-input",
         **{"hx-on::after-request": "document.getElementById('message-input').value = ''"},
         cls="flex gap-3 items-end w-full",
+    )
+
+
+def ModelSelector(current_model: str, oob=False):
+    """Dropdown to switch the LLM model."""
+    kwargs = {}
+    if oob:
+        kwargs["hx_swap_oob"] = "outerHTML"
+    return Select(
+        *[Option(m["label"], value=m["id"], selected=(m["id"] == current_model)) for m in MODELS],
+        name="model",
+        id="model-selector",
+        hx_post="/set-model",
+        hx_swap="none",
+        cls="select select-bordered select-sm",
+        **kwargs,
     )
 
 

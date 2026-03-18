@@ -116,6 +116,11 @@ class TestIndexRoute:
         # First visit is 0 tokens (new user)
         assert "0 tokens" in resp.text
 
+    def test_index_has_model_selector(self, client):
+        """GET / should include the model selector dropdown."""
+        resp = client.get("/")
+        assert 'id="model-selector"' in resp.text
+
 
 class TestClearRoute:
     """Tests for POST /clear"""
@@ -218,3 +223,32 @@ class TestStopRoute:
         """POST /stop should call agent.abort()."""
         client.post("/stop")
         web_app._mock_agent.abort.assert_called_once()
+
+
+class TestSetModelRoute:
+    """Tests for POST /set-model"""
+
+    def test_set_model_returns_200(self, client):
+        resp = client.post("/set-model", data={"model": "anthropic/claude-sonnet-4-6"})
+        assert resp.status_code == 200
+
+    def test_set_model_calls_agent_set_model(self, web_app, client):
+        """POST /set-model should call agent.set_model() with the provided model."""
+        client.post("/set-model", data={"model": "gemini/gemini-3-flash-preview"})
+        web_app._mock_agent.set_model.assert_called_once_with("gemini/gemini-3-flash-preview")
+
+    def test_set_model_returns_empty_body(self, client):
+        resp = client.post("/set-model", data={"model": "anthropic/claude-opus-4-6"})
+        assert resp.text == ""
+
+    def test_set_model_rejects_invalid_model(self, web_app, client):
+        """POST /set-model should ignore invalid model IDs."""
+        client.post("/set-model", data={"model": "invalid/fake-model"})
+        web_app._mock_agent.set_model.assert_not_called()
+
+    def test_set_model_rejects_while_streaming(self, web_app, client):
+        """POST /set-model should not change model while agent is streaming."""
+        web_app._mock_agent.state.is_streaming = True
+        client.post("/set-model", data={"model": "anthropic/claude-sonnet-4-6"})
+        web_app._mock_agent.set_model.assert_not_called()
+        web_app._mock_agent.state.is_streaming = False
