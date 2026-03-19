@@ -3,8 +3,6 @@
 ## User-Facing
 
 - [ ] **Image uploads in prompts** — `agent.prompt(message, images=[...])`. Users can't attach images to chat messages currently.
-- [x] **Model switching** — Navbar dropdown to pick from Claude Opus/Sonnet and Gemini Flash/Pro models. Visible only before first message; reappears on Clear. Thinking hardcoded to "high" for all models.
-- [ ] **Thinking level control** — `agent.set_thinking_level(level)`. Let users toggle off/low/medium/high thinking from the UI. Currently hardcoded to "high". Note: Claude 4.6 maps all levels to adaptive; Gemini respects levels but can't fully disable.
 - [ ] **Follow-up messages** — `agent.follow_up(message)`. Could be used for automated chaining (e.g. "after generating code, automatically run it").
 - [ ] **System prompt editing** — `agent.set_system_prompt(prompt)`. Let users customize the agent's behavior.
 - [ ] **Dynamic tools** — `agent.set_tools(tools)`. Add/remove tools mid-conversation (e.g. enable a web search tool on demand).
