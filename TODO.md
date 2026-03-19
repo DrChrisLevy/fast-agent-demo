@@ -1,21 +1,38 @@
-# Feature TODO — Unused liteagent Capabilities
+# TODO & Notes
 
-## User-Facing
+## liteagent Feature Coverage
 
-- [ ] **Image uploads in prompts** — `agent.prompt(message, images=[...])`. Users can't attach images to chat messages currently.
-- [ ] **Follow-up messages** — `agent.follow_up(message)`. Could be used for automated chaining (e.g. "after generating code, automatically run it").
-- [ ] **System prompt editing** — `agent.set_system_prompt(prompt)`. Let users customize the agent's behavior.
-- [ ] **Dynamic tools** — `agent.set_tools(tools)`. Add/remove tools mid-conversation (e.g. enable a web search tool on demand).
+What the app uses vs what liteagent supports:
 
-## Streaming / UI
+| liteagent feature | Used? | Notes |
+|---|---|---|
+| `prompt(message)` | Yes | Core flow |
+| `prompt(message, images=[...])` | No | No image upload UI yet |
+| `continue_run()` | No | Could resume after abort |
+| `steer(message)` | Yes | Input while streaming |
+| `follow_up(message)` | No | Auto-chain after agent stops |
+| `abort()` | Yes | Stop button |
+| `wait_for_idle()` | Yes | Clear while streaming |
+| `reset()` | Yes | Clear button |
+| `set_model(model)` | Yes | Model selector (navbar dropdown) |
+| `set_thinking_level(level)` | Yes | Hardcoded "high" for all models |
+| `set_system_prompt(prompt)` | No | Could let users customize |
+| `set_tools(tools)` | No | Could add/remove tools dynamically |
+| `replace_messages()` | No | Could enable message editing/forking |
+| `append_message()` | No | Could inject context |
+| `set_steering_mode("all")` | No | Deliver all queued steers at once |
+| `set_follow_up_mode("all")` | No | Deliver all follow-ups at once |
+| `subscribe(callback)` | Yes | SSE bridge |
+| `transform_context` hook | No | Context compaction/pruning — conversations accumulate unbounded |
+| `convert_to_llm` custom | No | Using default converter |
+| `on_update` in tools | No | Streaming partial tool results (e.g. stdout line-by-line) |
+| `Tool(params_model=...)` | No | Pydantic validation |
+| `Tool(label=...)` | No | Human-readable tool names in UI |
 
-- [ ] **Way cooler looking UI** — Overhaul the chat interface to look more polished and modern.
-- [ ] **Streaming tool updates** — `on_update(ToolResult(...))` for streaming partial results. The `run_code` tool could stream stdout line-by-line instead of waiting for completion.
-- [ ] **Tool labels** — `Tool(label="...")` for human-readable display names instead of showing `run_code`.
+## Ideas
 
-## Data / State
-
-- [ ] **Context compaction** — `transform_context` hook. Called before every LLM call to prune/summarize/compress message history. Currently conversations accumulate unbounded and will hit the context window limit.
-- [ ] **Message history editing** — `replace_messages()` / `append_message()`. Could enable editing/deleting messages, or forking conversations.
-- [ ] **Pydantic tool validation** — `Tool(params_model=MyModel)` for automatic argument validation/coercion before execution.
-- [ ] **Steering modes** — `set_steering_mode("all")` to deliver all queued steers at once instead of one-at-a-time.
+- **Image uploads** — Add file input to chat, pass to `agent.prompt(message, images=[...])`.
+- **Context compaction** — Use `transform_context` to prune/summarize before hitting context window limit. Important for long conversations.
+- **Streaming tool output** — Use `on_update(ToolResult(...))` so `run_code` can stream stdout line-by-line instead of waiting for completion.
+- **System prompt editing** — Let users tweak the system prompt from the UI.
+- **UI overhaul** — Better theme, spacing, typography. Collapsible thinking. Tool block styling.
